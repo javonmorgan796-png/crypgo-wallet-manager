@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+  { icon: Wallet, label: 'Wallet', href: '/wallet' },
   { icon: TrendingUp, label: 'Investments', href: '/investments' },
   { icon: Users, label: 'Copy Trade', href: '/copy-trade' },
   { icon: History, label: 'Transactions', href: '/transactions' },
@@ -22,7 +23,7 @@ export function Sidebar() {
   const location = useLocation();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-sidebar">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-sidebar hidden lg:block">
       <div className="flex h-full flex-col">
         {/* Logo */}
         <div className="flex h-16 items-center gap-2 border-b border-border px-6">

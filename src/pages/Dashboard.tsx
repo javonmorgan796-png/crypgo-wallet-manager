@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { mockUser, mockInvestments, mockCopyTrades, mockTransactions } from '@/data/mockData';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { PortfolioChart } from '@/components/charts/PortfolioChart';
 
 export default function Dashboard() {
   const activeInvestments = mockInvestments.filter(inv => inv.status === 'active');
@@ -84,6 +85,9 @@ export default function Dashboard() {
             </Card>
           ))}
         </div>
+
+        {/* Portfolio Chart */}
+        <PortfolioChart />
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Active Investments */}
