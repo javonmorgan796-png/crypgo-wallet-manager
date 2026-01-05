@@ -11,6 +11,7 @@ import Investments from "./pages/Investments";
 import CopyTrade from "./pages/CopyTrade";
 import Transactions from "./pages/Transactions";
 import Settings from "./pages/Settings";
+import Wallet from "./pages/Wallet";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/wallet" element={<Wallet />} />
           <Route path="/investments" element={<Investments />} />
           <Route path="/copy-trade" element={<CopyTrade />} />
           <Route path="/transactions" element={<Transactions />} />
