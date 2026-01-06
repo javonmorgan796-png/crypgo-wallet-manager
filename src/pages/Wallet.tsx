@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,28 +6,65 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin, Upload, FileImage } from 'lucide-react';
 import { mockUser } from '@/data/mockData';
 import { toast } from 'sonner';
 
-const cryptoAddresses = {
-  btc: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
-  eth: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bE7c',
-  usdt: 'TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9',
-};
+const cryptoOptions = [
+  { value: 'btc', label: 'Bitcoin (BTC)', address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' },
+  { value: 'eth', label: 'Ethereum (ETH)', address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bE7c' },
+  { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9' },
+];
 
 export default function WalletPage() {
-  const [selectedCrypto, setSelectedCrypto] = useState('btc');
+  const [selectedCrypto, setSelectedCrypto] = useState('usdt-trc20');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
-  const [withdrawCrypto, setWithdrawCrypto] = useState('btc');
+  const [withdrawCrypto, setWithdrawCrypto] = useState('usdt-trc20');
   const [copied, setCopied] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopied(field);
     toast.success('Copied to clipboard!');
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
+        return;
+      }
+      setReceiptFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReceiptPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDepositSubmit = () => {
+    if (!depositAmount || parseFloat(depositAmount) < 100) {
+      toast.error('Minimum deposit is $100');
+      return;
+    }
+    if (!receiptFile) {
+      toast.error('Please upload your payment receipt');
+      return;
+    }
+    toast.success(`Deposit of $${depositAmount} submitted! We'll verify your payment shortly.`);
+    setDepositAmount('');
+    setReceiptFile(null);
+    setReceiptPreview(null);
   };
 
   const handleWithdraw = () => {
@@ -96,7 +133,7 @@ export default function WalletPage() {
                   Crypto Deposit
                 </CardTitle>
                 <CardDescription>
-                  Send cryptocurrency to the address below
+                  Send cryptocurrency to the address below and upload your payment receipt
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -107,9 +144,11 @@ export default function WalletPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="btc">Bitcoin (BTC)</SelectItem>
-                      <SelectItem value="eth">Ethereum (ETH)</SelectItem>
-                      <SelectItem value="usdt">USDT (TRC-20)</SelectItem>
+                      {cryptoOptions.map((crypto) => (
+                        <SelectItem key={crypto.value} value={crypto.value}>
+                          {crypto.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -119,16 +158,13 @@ export default function WalletPage() {
                   <div className="flex gap-2">
                     <Input
                       readOnly
-                      value={cryptoAddresses[selectedCrypto as keyof typeof cryptoAddresses]}
+                      value={currentCrypto?.address || ''}
                       className="bg-secondary border-border font-mono text-sm"
                     />
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => copyToClipboard(
-                        cryptoAddresses[selectedCrypto as keyof typeof cryptoAddresses],
-                        'crypto'
-                      )}
+                      onClick={() => copyToClipboard(currentCrypto?.address || '', 'crypto')}
                       className="border-border"
                     >
                       {copied === 'crypto' ? (
@@ -140,18 +176,85 @@ export default function WalletPage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label>Deposit Amount (USD)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Enter amount (min $100)"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className="bg-secondary border-border"
+                  />
+                </div>
+
+                {/* Receipt Upload */}
+                <div className="space-y-2">
+                  <Label>Upload Payment Receipt</Label>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  >
+                    {receiptPreview ? (
+                      <div className="space-y-2">
+                        <img
+                          src={receiptPreview}
+                          alt="Receipt preview"
+                          className="max-h-32 mx-auto rounded-lg"
+                        />
+                        <p className="text-sm text-muted-foreground">{receiptFile?.name}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReceiptFile(null);
+                            setReceiptPreview(null);
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                          <Upload className="h-6 w-6 text-primary" />
+                        </div>
+                        <p className="text-sm text-foreground font-medium">Click to upload receipt</p>
+                        <p className="text-xs text-muted-foreground">PNG, JPG up to 5MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
                   <p className="text-sm text-warning">
-                    Only send {selectedCrypto.toUpperCase()} to this address. Sending other cryptocurrencies may result in permanent loss.
+                    Only send {currentCrypto?.label} to this address. Sending other cryptocurrencies may result in permanent loss.
                   </p>
                 </div>
+
+                <Button 
+                  onClick={handleDepositSubmit}
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  size="lg"
+                >
+                  <FileImage className="h-4 w-4 mr-2" />
+                  Submit Deposit Request
+                </Button>
 
                 <div className="p-4 rounded-lg bg-muted/50 border border-border">
                   <h4 className="font-medium text-foreground mb-2">Deposit Instructions:</h4>
                   <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
                     <li>Minimum deposit: $100 equivalent</li>
-                    <li>Deposits are credited after 3 network confirmations</li>
-                    <li>Processing time: 10-30 minutes</li>
+                    <li>Send crypto to the address above</li>
+                    <li>Upload your transaction receipt/screenshot</li>
+                    <li>Processing time: 10-30 minutes after verification</li>
                   </ul>
                 </div>
               </CardContent>
@@ -178,9 +281,11 @@ export default function WalletPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="btc">Bitcoin (BTC)</SelectItem>
-                      <SelectItem value="eth">Ethereum (ETH)</SelectItem>
-                      <SelectItem value="usdt">USDT (TRC-20)</SelectItem>
+                      {cryptoOptions.map((crypto) => (
+                        <SelectItem key={crypto.value} value={crypto.value}>
+                          {crypto.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

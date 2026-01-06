@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Filter, Search } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Download, Filter, Search, Calendar } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { format } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -17,15 +20,24 @@ import { useToast } from '@/hooks/use-toast';
 
 export default function Transactions() {
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
   const { toast } = useToast();
 
   const filteredTransactions = mockTransactions.filter((transaction) => {
     const matchesType = filterType === 'all' || transaction.type === filterType;
+    const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus;
     const matchesSearch =
       transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       transaction.reference?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesSearch;
+    
+    const transactionDate = new Date(transaction.createdAt);
+    const matchesDateFrom = !dateFrom || transactionDate >= dateFrom;
+    const matchesDateTo = !dateTo || transactionDate <= dateTo;
+
+    return matchesType && matchesStatus && matchesSearch && matchesDateFrom && matchesDateTo;
   });
 
   const handleExport = () => {
@@ -33,6 +45,14 @@ export default function Transactions() {
       title: 'Export started',
       description: 'Your transaction history will be downloaded shortly.',
     });
+  };
+
+  const clearFilters = () => {
+    setFilterType('all');
+    setFilterStatus('all');
+    setSearchQuery('');
+    setDateFrom(undefined);
+    setDateTo(undefined);
   };
 
   const getTypeColor = (type: string) => {
@@ -47,6 +67,8 @@ export default function Transactions() {
         return 'bg-primary/10 text-primary border-primary/30';
       case 'copy-trade':
         return 'bg-purple-500/10 text-purple-500 border-purple-500/30';
+      case 'referral':
+        return 'bg-pink-500/10 text-pink-500 border-pink-500/30';
       default:
         return 'bg-muted text-muted-foreground';
     }
@@ -148,33 +170,89 @@ export default function Transactions() {
           </Card>
         </div>
 
-        {/* Filters */}
+        {/* Enhanced Filters */}
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search by description or reference..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-secondary border-border"
-                />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by description or reference..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-secondary border-border"
+                  />
+                </div>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-full md:w-40 bg-secondary border-border">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="deposit">Deposits</SelectItem>
+                    <SelectItem value="withdrawal">Withdrawals</SelectItem>
+                    <SelectItem value="investment">Investments</SelectItem>
+                    <SelectItem value="profit">Profits</SelectItem>
+                    <SelectItem value="copy-trade">Copy Trades</SelectItem>
+                    <SelectItem value="referral">Referral</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-full md:w-40 bg-secondary border-border">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full md:w-48 bg-secondary border-border">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="deposit">Deposits</SelectItem>
-                  <SelectItem value="withdrawal">Withdrawals</SelectItem>
-                  <SelectItem value="investment">Investments</SelectItem>
-                  <SelectItem value="profit">Profits</SelectItem>
-                  <SelectItem value="copy-trade">Copy Trades</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                <div className="flex gap-2 items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="bg-secondary border-border">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        {dateFrom ? format(dateFrom, 'PP') : 'From Date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={setDateFrom}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-muted-foreground">to</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="bg-secondary border-border">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        {dateTo ? format(dateTo, 'PP') : 'To Date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={setDateTo}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                {(filterType !== 'all' || filterStatus !== 'all' || searchQuery || dateFrom || dateTo) && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -182,7 +260,12 @@ export default function Transactions() {
         {/* Transactions List */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="font-display text-xl">Transaction History</CardTitle>
+            <CardTitle className="font-display text-xl">
+              Transaction History
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({filteredTransactions.length} transactions)
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -217,7 +300,10 @@ export default function Transactions() {
                       <Badge variant="outline" className={getTypeColor(transaction.type)}>
                         {transaction.type.replace('-', ' ')}
                       </Badge>
-                      <div className="text-right">
+                      <Badge variant="outline" className={`capitalize ${getStatusColor(transaction.status)} border-current/30 bg-current/10`}>
+                        {transaction.status}
+                      </Badge>
+                      <div className="text-right min-w-[100px]">
                         <p
                           className={`font-semibold ${
                             transaction.amount >= 0 ? 'text-primary' : 'text-foreground'
@@ -225,9 +311,6 @@ export default function Transactions() {
                         >
                           {transaction.amount >= 0 ? '+' : ''}$
                           {Math.abs(transaction.amount).toLocaleString()}
-                        </p>
-                        <p className={`text-xs capitalize ${getStatusColor(transaction.status)}`}>
-                          {transaction.status}
                         </p>
                       </div>
                       {transaction.reference && (

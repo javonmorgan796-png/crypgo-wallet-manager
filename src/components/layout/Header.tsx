@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, Search, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { mockUser, cryptoPrices } from '@/data/mockData';
+import { mockUser } from '@/data/mockData';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,9 +44,41 @@ const mockNotifications = [
   },
 ];
 
+// Live crypto prices with auto-refresh
+const useLivePrices = () => {
+  const [prices, setPrices] = useState([
+    { symbol: 'BTC', name: 'Bitcoin', price: 43250.80, change24h: 2.34, icon: '₿' },
+    { symbol: 'ETH', name: 'Ethereum', price: 2280.45, change24h: 1.87, icon: 'Ξ' },
+    { symbol: 'BNB', name: 'BNB', price: 312.20, change24h: -0.54, icon: '⬡' },
+    { symbol: 'SOL', name: 'Solana', price: 98.75, change24h: 5.21, icon: '◎' },
+    { symbol: 'USDT', name: 'Tether', price: 1.00, change24h: 0.01, icon: '₮' },
+  ]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPrices(prevPrices => 
+        prevPrices.map(crypto => ({
+          ...crypto,
+          price: crypto.symbol === 'USDT' 
+            ? 1.00 
+            : crypto.price * (1 + (Math.random() - 0.5) * 0.002),
+          change24h: crypto.symbol === 'USDT'
+            ? 0.01
+            : crypto.change24h + (Math.random() - 0.5) * 0.1,
+        }))
+      );
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return prices;
+};
+
 export function Header() {
   const [notifications, setNotifications] = useState(mockNotifications);
   const unreadCount = notifications.filter(n => !n.read).length;
+  const livePrices = useLivePrices();
 
   const markAsRead = (id: string) => {
     setNotifications(prev =>
@@ -62,18 +94,20 @@ export function Header() {
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-xl">
       {/* Live Prices Ticker */}
       <div className="hidden md:flex items-center gap-4 overflow-hidden">
-        {cryptoPrices.slice(0, 4).map((crypto) => (
+        {livePrices.slice(0, 4).map((crypto) => (
           <div key={crypto.symbol} className="flex items-center gap-2 text-sm">
             <span className="text-lg">{crypto.icon}</span>
             <span className="font-medium text-foreground">{crypto.symbol}</span>
-            <span className="text-muted-foreground">${crypto.price.toLocaleString()}</span>
-            <span className={`flex items-center gap-0.5 ${crypto.change24h >= 0 ? 'text-primary' : 'text-destructive'}`}>
+            <span className="text-muted-foreground transition-all duration-300">
+              ${crypto.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className={`flex items-center gap-0.5 transition-all duration-300 ${crypto.change24h >= 0 ? 'text-primary' : 'text-destructive'}`}>
               {crypto.change24h >= 0 ? (
                 <TrendingUp className="h-3 w-3" />
               ) : (
                 <TrendingDown className="h-3 w-3" />
               )}
-              {crypto.change24h >= 0 ? '+' : ''}{crypto.change24h}%
+              {crypto.change24h >= 0 ? '+' : ''}{crypto.change24h.toFixed(2)}%
             </span>
           </div>
         ))}
