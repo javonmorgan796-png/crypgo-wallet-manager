@@ -6,7 +6,8 @@ import {
   History, 
   Settings, 
   LogOut,
-  Wallet
+  Wallet,
+  Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import logo from '@/assets/logo.png';
@@ -17,6 +18,7 @@ const navItems = [
   { icon: TrendingUp, label: 'Investments', href: '/investments' },
   { icon: Users, label: 'Copy Trade', href: '/copy-trade' },
   { icon: History, label: 'Transactions', href: '/transactions' },
+  { icon: Gift, label: 'Referral', href: '/referral' },
   { icon: Settings, label: 'Settings', href: '/settings' },
 ];
 
