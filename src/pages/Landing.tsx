@@ -7,11 +7,11 @@ import {
   Zap, 
   BarChart3,
   Lock,
-  Wallet,
   ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cryptoPrices } from '@/data/mockData';
+import logo from '@/assets/logo.png';
 
 export default function Landing() {
   return (
@@ -20,10 +20,8 @@ export default function Landing() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <Wallet className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="font-display text-xl font-bold text-foreground">CryptoVest</span>
+            <img src={logo} alt="Green Bull" className="h-9 w-9 rounded-lg object-cover" />
+            <span className="font-display text-xl font-bold text-foreground">Green Bull</span>
           </div>
           
           <div className="hidden md:flex items-center gap-8">
@@ -122,7 +120,7 @@ export default function Landing() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="font-display text-4xl font-bold text-foreground mb-4">
-              Why Choose CryptoVest?
+              Why Choose Green Bull?
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               We provide the tools and security you need to grow your crypto investments with confidence.
@@ -154,7 +152,7 @@ export default function Landing() {
               {
                 icon: Zap,
                 title: 'Instant Deposits',
-                description: 'Start investing immediately with our instant deposit and withdrawal system.',
+                description: 'Start investing immediately with our instant cryptocurrency deposit system.',
               },
               {
                 icon: Lock,
@@ -202,8 +200,8 @@ export default function Landing() {
               },
               {
                 step: '02',
-                title: 'Deposit Funds',
-                description: 'Add funds via bank transfer, credit card, or cryptocurrency. Minimum $100 to start.',
+                title: 'Deposit Crypto',
+                description: 'Add funds via cryptocurrency. Minimum $100 in BTC, ETH, or USDT to start.',
               },
               {
                 step: '03',
@@ -240,7 +238,7 @@ export default function Landing() {
                 Ready to Start Investing?
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto mb-8">
-                Join over 25,000 investors who trust CryptoVest with their crypto investments. Start earning passive income today.
+                Join over 25,000 investors who trust Green Bull with their crypto investments. Start earning passive income today.
               </p>
               <Link to="/signup">
                 <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 text-lg px-8 py-6 glow-green">
@@ -258,10 +256,8 @@ export default function Landing() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                <Wallet className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="font-display text-xl font-bold text-foreground">CryptoVest</span>
+              <img src={logo} alt="Green Bull" className="h-9 w-9 rounded-lg object-cover" />
+              <span className="font-display text-xl font-bold text-foreground">Green Bull</span>
             </div>
             
             <div className="flex items-center gap-8">
@@ -271,7 +267,7 @@ export default function Landing() {
             </div>
 
             <p className="text-sm text-muted-foreground">
-              © 2024 CryptoVest. All rights reserved.
+              © 2024 Green Bull. All rights reserved.
             </p>
           </div>
         </div>

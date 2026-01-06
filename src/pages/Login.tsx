@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, Wallet } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import logo from '@/assets/logo.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,7 @@ export default function Login() {
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
-      navigate('/dashboard');
+      navigate('/wallet');
     }, 1000);
   };
 
@@ -36,10 +37,8 @@ export default function Login() {
         <div className="w-full max-w-md space-y-8">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Wallet className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <span className="font-display text-2xl font-bold text-foreground">CryptoVest</span>
+            <img src={logo} alt="Green Bull" className="h-10 w-10 rounded-lg object-cover" />
+            <span className="font-display text-2xl font-bold text-foreground">Green Bull</span>
           </div>
 
           {/* Header */}
@@ -126,7 +125,7 @@ export default function Login() {
         <div className="relative z-10 max-w-md text-center px-8">
           <div className="mb-8 flex justify-center">
             <div className="h-32 w-32 rounded-full bg-primary/20 flex items-center justify-center animate-pulse-glow">
-              <Wallet className="h-16 w-16 text-primary" />
+              <img src={logo} alt="Green Bull" className="h-20 w-20 rounded-full object-cover" />
             </div>
           </div>
           <h2 className="font-display text-3xl font-bold text-foreground mb-4">

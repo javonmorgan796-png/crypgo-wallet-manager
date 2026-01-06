@@ -8,16 +8,16 @@ import {
   Settings, 
   LogOut,
   Wallet,
-  Menu,
-  X
+  Menu
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import logo from '@/assets/logo.png';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: Wallet, label: 'Wallet', href: '/wallet' },
+  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: TrendingUp, label: 'Investments', href: '/investments' },
   { icon: Users, label: 'Copy Trade', href: '/copy-trade' },
   { icon: History, label: 'Transactions', href: '/transactions' },
@@ -41,10 +41,8 @@ export function MobileNav() {
           {/* Logo */}
           <div className="flex h-16 items-center justify-between border-b border-border px-6">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                <Wallet className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="font-display text-xl font-bold text-foreground">CryptoVest</span>
+              <img src={logo} alt="Green Bull" className="h-9 w-9 rounded-lg object-cover" />
+              <span className="font-display text-xl font-bold text-foreground">Green Bull</span>
             </div>
           </div>
 
