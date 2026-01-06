@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User, Wallet } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import logo from '@/assets/logo.png';
 
 export default function SignUp() {
   const [name, setName] = useState('');
@@ -35,7 +36,7 @@ export default function SignUp() {
       setIsLoading(false);
       toast({
         title: 'Account created!',
-        description: 'Welcome to CryptoVest. Please log in to continue.',
+        description: 'Welcome to Green Bull. Please log in to continue.',
       });
       navigate('/login');
     }, 1000);
@@ -49,7 +50,7 @@ export default function SignUp() {
         <div className="relative z-10 max-w-md text-center px-8">
           <div className="mb-8 flex justify-center">
             <div className="h-32 w-32 rounded-full bg-primary/20 flex items-center justify-center animate-pulse-glow">
-              <Wallet className="h-16 w-16 text-primary" />
+              <img src={logo} alt="Green Bull" className="h-20 w-20 rounded-full object-cover" />
             </div>
           </div>
           <h2 className="font-display text-3xl font-bold text-foreground mb-4">
@@ -66,17 +67,15 @@ export default function SignUp() {
         <div className="w-full max-w-md space-y-8">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Wallet className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <span className="font-display text-2xl font-bold text-foreground">CryptoVest</span>
+            <img src={logo} alt="Green Bull" className="h-10 w-10 rounded-lg object-cover" />
+            <span className="font-display text-2xl font-bold text-foreground">Green Bull</span>
           </div>
 
           {/* Header */}
           <div>
             <h1 className="font-display text-3xl font-bold text-foreground">Create account</h1>
             <p className="mt-2 text-muted-foreground">
-              Join CryptoVest and start investing today
+              Join Green Bull and start investing today
             </p>
           </div>
 

@@ -1,13 +1,86 @@
-import { Bell, Search } from 'lucide-react';
+import { useState } from 'react';
+import { Bell, Search, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { mockUser } from '@/data/mockData';
+import { mockUser, cryptoPrices } from '@/data/mockData';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+
+const mockNotifications = [
+  {
+    id: '1',
+    title: 'Deposit Confirmed',
+    message: 'Your deposit of $5,000 has been confirmed.',
+    time: '5 min ago',
+    read: false,
+  },
+  {
+    id: '2',
+    title: 'Investment Matured',
+    message: 'Your Gold Plan investment has matured with 30% ROI.',
+    time: '1 hour ago',
+    read: false,
+  },
+  {
+    id: '3',
+    title: 'Copy Trade Profit',
+    message: 'You earned $340 from Sarah Chen\'s trade.',
+    time: '3 hours ago',
+    read: true,
+  },
+  {
+    id: '4',
+    title: 'Welcome Bonus',
+    message: 'You received a $50 welcome bonus!',
+    time: '1 day ago',
+    read: true,
+  },
+];
 
 export function Header() {
+  const [notifications, setNotifications] = useState(mockNotifications);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-xl">
-      {/* Search */}
-      <div className="relative w-80">
+      {/* Live Prices Ticker */}
+      <div className="hidden md:flex items-center gap-4 overflow-hidden">
+        {cryptoPrices.slice(0, 4).map((crypto) => (
+          <div key={crypto.symbol} className="flex items-center gap-2 text-sm">
+            <span className="text-lg">{crypto.icon}</span>
+            <span className="font-medium text-foreground">{crypto.symbol}</span>
+            <span className="text-muted-foreground">${crypto.price.toLocaleString()}</span>
+            <span className={`flex items-center gap-0.5 ${crypto.change24h >= 0 ? 'text-primary' : 'text-destructive'}`}>
+              {crypto.change24h >= 0 ? (
+                <TrendingUp className="h-3 w-3" />
+              ) : (
+                <TrendingDown className="h-3 w-3" />
+              )}
+              {crypto.change24h >= 0 ? '+' : ''}{crypto.change24h}%
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Search - Mobile */}
+      <div className="relative w-48 md:hidden">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search..."
@@ -17,13 +90,52 @@ export function Header() {
 
       {/* Right side */}
       <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-            3
-          </span>
-        </Button>
+        {/* Notifications Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5 text-muted-foreground" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80 bg-card border-border">
+            <DropdownMenuLabel className="flex items-center justify-between">
+              <span>Notifications</span>
+              {unreadCount > 0 && (
+                <Button variant="ghost" size="sm" className="text-xs h-auto py-1" onClick={markAllAsRead}>
+                  Mark all read
+                </Button>
+              )}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {notifications.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground text-sm">
+                No notifications
+              </div>
+            ) : (
+              notifications.map((notification) => (
+                <DropdownMenuItem
+                  key={notification.id}
+                  className="flex flex-col items-start gap-1 p-4 cursor-pointer"
+                  onClick={() => markAsRead(notification.id)}
+                >
+                  <div className="flex items-center gap-2 w-full">
+                    <span className="font-medium text-foreground">{notification.title}</span>
+                    {!notification.read && (
+                      <Badge variant="default" className="h-2 w-2 p-0 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <span className="text-sm text-muted-foreground">{notification.message}</span>
+                  <span className="text-xs text-muted-foreground">{notification.time}</span>
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Balance */}
         <div className="flex items-center gap-3 rounded-lg bg-secondary px-4 py-2">

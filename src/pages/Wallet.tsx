@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin, DollarSign, Building2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin } from 'lucide-react';
 import { mockUser } from '@/data/mockData';
 import { toast } from 'sonner';
 
@@ -16,20 +16,11 @@ const cryptoAddresses = {
   usdt: 'TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9',
 };
 
-const bankDetails = {
-  bankName: 'Chase Bank',
-  accountName: 'CryptoVest Holdings LLC',
-  accountNumber: '****4892',
-  routingNumber: '021000021',
-  swiftCode: 'CHASUS33',
-};
-
 export default function WalletPage() {
-  const [depositAmount, setDepositAmount] = useState('');
-  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [selectedCrypto, setSelectedCrypto] = useState('btc');
-  const [withdrawMethod, setWithdrawMethod] = useState('crypto');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
+  const [withdrawCrypto, setWithdrawCrypto] = useState('btc');
   const [copied, setCopied] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, field: string) => {
@@ -37,15 +28,6 @@ export default function WalletPage() {
     setCopied(field);
     toast.success('Copied to clipboard!');
     setTimeout(() => setCopied(null), 2000);
-  };
-
-  const handleDeposit = () => {
-    if (!depositAmount || parseFloat(depositAmount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-    toast.success(`Deposit request of $${depositAmount} submitted!`);
-    setDepositAmount('');
   };
 
   const handleWithdraw = () => {
@@ -57,11 +39,11 @@ export default function WalletPage() {
       toast.error('Insufficient balance');
       return;
     }
-    if (withdrawMethod === 'crypto' && !withdrawAddress) {
+    if (!withdrawAddress) {
       toast.error('Please enter your wallet address');
       return;
     }
-    toast.success(`Withdrawal request of $${withdrawAmount} submitted!`);
+    toast.success(`Withdrawal request of $${withdrawAmount} in ${withdrawCrypto.toUpperCase()} submitted!`);
     setWithdrawAmount('');
     setWithdrawAddress('');
   };
@@ -72,7 +54,7 @@ export default function WalletPage() {
         {/* Page Header */}
         <div>
           <h1 className="font-display text-3xl font-bold text-foreground">Wallet</h1>
-          <p className="text-muted-foreground">Manage your deposits and withdrawals</p>
+          <p className="text-muted-foreground">Manage your cryptocurrency deposits and withdrawals</p>
         </div>
 
         {/* Balance Card */}
@@ -107,198 +89,121 @@ export default function WalletPage() {
 
           {/* Deposit Tab */}
           <TabsContent value="deposit" className="mt-6">
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Crypto Deposit */}
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Bitcoin className="h-5 w-5 text-primary" />
-                    Crypto Deposit
-                  </CardTitle>
-                  <CardDescription>
-                    Send cryptocurrency to the address below
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Select Cryptocurrency</Label>
-                    <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
-                      <SelectTrigger className="bg-secondary border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="btc">Bitcoin (BTC)</SelectItem>
-                        <SelectItem value="eth">Ethereum (ETH)</SelectItem>
-                        <SelectItem value="usdt">USDT (TRC-20)</SelectItem>
-                      </SelectContent>
-                    </Select>
+            <Card className="bg-card border-border max-w-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bitcoin className="h-5 w-5 text-primary" />
+                  Crypto Deposit
+                </CardTitle>
+                <CardDescription>
+                  Send cryptocurrency to the address below
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Select Cryptocurrency</Label>
+                  <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
+                    <SelectTrigger className="bg-secondary border-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="btc">Bitcoin (BTC)</SelectItem>
+                      <SelectItem value="eth">Ethereum (ETH)</SelectItem>
+                      <SelectItem value="usdt">USDT (TRC-20)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Wallet Address</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={cryptoAddresses[selectedCrypto as keyof typeof cryptoAddresses]}
+                      className="bg-secondary border-border font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(
+                        cryptoAddresses[selectedCrypto as keyof typeof cryptoAddresses],
+                        'crypto'
+                      )}
+                      className="border-border"
+                    >
+                      {copied === 'crypto' ? (
+                        <Check className="h-4 w-4 text-primary" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Wallet Address</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        readOnly
-                        value={cryptoAddresses[selectedCrypto as keyof typeof cryptoAddresses]}
-                        className="bg-secondary border-border font-mono text-sm"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => copyToClipboard(
-                          cryptoAddresses[selectedCrypto as keyof typeof cryptoAddresses],
-                          'crypto'
-                        )}
-                        className="border-border"
-                      >
-                        {copied === 'crypto' ? (
-                          <Check className="h-4 w-4 text-primary" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                </div>
 
-                  <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
-                    <p className="text-sm text-warning">
-                      Only send {selectedCrypto.toUpperCase()} to this address. Sending other cryptocurrencies may result in permanent loss.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+                <div className="p-4 rounded-lg bg-warning/10 border border-warning/30">
+                  <p className="text-sm text-warning">
+                    Only send {selectedCrypto.toUpperCase()} to this address. Sending other cryptocurrencies may result in permanent loss.
+                  </p>
+                </div>
 
-              {/* Bank Transfer */}
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-primary" />
-                    Bank Transfer
-                  </CardTitle>
-                  <CardDescription>
-                    Transfer funds from your bank account
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    {Object.entries(bankDetails).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
-                        <span className="text-sm text-muted-foreground capitalize">
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">{value}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => copyToClipboard(value, key)}
-                          >
-                            {copied === key ? (
-                              <Check className="h-3 w-3 text-primary" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-2 pt-4 border-t border-border">
-                    <Label>Amount to Deposit (USD)</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="number"
-                          placeholder="0.00"
-                          value={depositAmount}
-                          onChange={(e) => setDepositAmount(e.target.value)}
-                          className="pl-9 bg-secondary border-border"
-                        />
-                      </div>
-                      <Button onClick={handleDeposit} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                        Confirm
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                  <h4 className="font-medium text-foreground mb-2">Deposit Instructions:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Minimum deposit: $100 equivalent</li>
+                    <li>Deposits are credited after 3 network confirmations</li>
+                    <li>Processing time: 10-30 minutes</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Withdraw Tab */}
           <TabsContent value="withdraw" className="mt-6">
             <Card className="bg-card border-border max-w-xl">
               <CardHeader>
-                <CardTitle>Withdraw Funds</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Bitcoin className="h-5 w-5 text-primary" />
+                  Crypto Withdrawal
+                </CardTitle>
                 <CardDescription>
-                  Withdraw to your crypto wallet or bank account
+                  Withdraw to your crypto wallet
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Withdrawal Method</Label>
-                  <Select value={withdrawMethod} onValueChange={setWithdrawMethod}>
+                  <Label>Select Cryptocurrency</Label>
+                  <Select value={withdrawCrypto} onValueChange={setWithdrawCrypto}>
                     <SelectTrigger className="bg-secondary border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="crypto">Cryptocurrency</SelectItem>
-                      <SelectItem value="bank">Bank Transfer</SelectItem>
+                      <SelectItem value="btc">Bitcoin (BTC)</SelectItem>
+                      <SelectItem value="eth">Ethereum (ETH)</SelectItem>
+                      <SelectItem value="usdt">USDT (TRC-20)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {withdrawMethod === 'crypto' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Select Cryptocurrency</Label>
-                      <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
-                        <SelectTrigger className="bg-secondary border-border">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="btc">Bitcoin (BTC)</SelectItem>
-                          <SelectItem value="eth">Ethereum (ETH)</SelectItem>
-                          <SelectItem value="usdt">USDT (TRC-20)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Your Wallet Address</Label>
-                      <Input
-                        placeholder="Enter your wallet address"
-                        value={withdrawAddress}
-                        onChange={(e) => setWithdrawAddress(e.target.value)}
-                        className="bg-secondary border-border font-mono"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {withdrawMethod === 'bank' && (
-                  <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-sm text-muted-foreground">
-                      Bank transfers will be sent to your registered bank account. Processing time: 1-3 business days.
-                    </p>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label>Your Wallet Address</Label>
+                  <Input
+                    placeholder="Enter your wallet address"
+                    value={withdrawAddress}
+                    onChange={(e) => setWithdrawAddress(e.target.value)}
+                    className="bg-secondary border-border font-mono"
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <Label>Amount (USD)</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="pl-9 bg-secondary border-border"
-                    />
-                  </div>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    className="bg-secondary border-border"
+                  />
                   <p className="text-xs text-muted-foreground">
                     Available: ${mockUser.balance.toLocaleString()}
                   </p>
