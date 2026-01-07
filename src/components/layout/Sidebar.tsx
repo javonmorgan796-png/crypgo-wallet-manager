@@ -7,7 +7,8 @@ import {
   Settings, 
   LogOut,
   Wallet,
-  Gift
+  Gift,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import logo from '@/assets/logo.png';
@@ -19,6 +20,7 @@ const navItems = [
   { icon: Users, label: 'Copy Trade', href: '/copy-trade' },
   { icon: History, label: 'Transactions', href: '/transactions' },
   { icon: Gift, label: 'Referral', href: '/referral' },
+  { icon: Shield, label: 'KYC Verification', href: '/kyc' },
   { icon: Settings, label: 'Settings', href: '/settings' },
 ];
 

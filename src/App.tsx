@@ -13,6 +13,7 @@ import Transactions from "./pages/Transactions";
 import Settings from "./pages/Settings";
 import Wallet from "./pages/Wallet";
 import Referral from "./pages/Referral";
+import KYC from "./pages/KYC";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/copy-trade" element={<CopyTrade />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/referral" element={<Referral />} />
+          <Route path="/kyc" element={<KYC />} />
           <Route path="/settings" element={<Settings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
