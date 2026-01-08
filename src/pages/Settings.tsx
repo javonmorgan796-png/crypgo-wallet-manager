@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, Lock, Bell, Shield, Camera } from 'lucide-react';
+import { User, Lock, Bell, Camera } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TwoFactorSetup } from '@/components/auth/TwoFactorSetup';
 import { mockUser } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Settings() {
   const [name, setName] = useState(mockUser.name);
   const [email, setEmail] = useState(mockUser.email);
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -183,28 +185,10 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="font-display text-xl">Two-Factor Authentication</CardTitle>
-                  <CardDescription>Add an extra layer of security to your account</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Shield className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">Enable 2FA</p>
-                        <p className="text-sm text-muted-foreground">
-                          Secure your account with two-factor authentication
-                        </p>
-                      </div>
-                    </div>
-                    <Switch />
-                  </div>
-                </CardContent>
-              </Card>
+              <TwoFactorSetup 
+                isEnabled={is2FAEnabled} 
+                onStatusChange={setIs2FAEnabled} 
+              />
             </div>
           </TabsContent>
 
