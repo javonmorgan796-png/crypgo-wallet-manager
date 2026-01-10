@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import logo from '@/assets/logo.png';
 
 export default function Login() {
@@ -14,20 +15,42 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate login
-    setTimeout(() => {
-      setIsLoading(false);
+    const result = await login(email, password);
+    setIsLoading(false);
+    
+    if (result.success) {
+      if (result.requires2FA) {
+        toast({
+          title: '2FA Required',
+          description: 'Please enter your 2FA code.',
+        });
+        return;
+      }
+      
       toast({
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
-      navigate('/wallet');
-    }, 1000);
+      
+      // Redirect based on role - admin goes to admin dashboard
+      if (email === 'admin@greenbull.com') {
+        navigate('/admin');
+      } else {
+        navigate('/wallet');
+      }
+    } else {
+      toast({
+        title: 'Login Failed',
+        description: result.error || 'Invalid credentials.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -95,7 +118,7 @@ export default function Login() {
                 <input type="checkbox" className="rounded border-border" />
                 <span className="text-sm text-muted-foreground">Remember me</span>
               </label>
-              <Link to="#" className="text-sm text-primary hover:underline">
+              <Link to="/forgot-password" className="text-sm text-primary hover:underline">
                 Forgot password?
               </Link>
             </div>

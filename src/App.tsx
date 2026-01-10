@@ -15,6 +15,9 @@ import Settings from "./pages/Settings";
 import Wallet from "./pages/Wallet";
 import Referral from "./pages/Referral";
 import KYC from "./pages/KYC";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -31,6 +34,9 @@ const App = () => (
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/investments" element={<Investments />} />
