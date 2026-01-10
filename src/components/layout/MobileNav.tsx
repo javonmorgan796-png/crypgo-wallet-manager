@@ -10,11 +10,13 @@ import {
   Wallet,
   Menu,
   Gift,
-  Shield
+  Shield,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useAuth } from '@/contexts/AuthContext';
 import logo from '@/assets/logo.png';
 
 const navItems = [
@@ -31,6 +33,12 @@ const navItems = [
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { isAdmin, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    setOpen(false);
+  };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -71,13 +79,30 @@ export function MobileNav() {
                 </Link>
               );
             })}
+            
+            {/* Admin Panel Link - Only visible for admins */}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200',
+                  location.pathname === '/admin'
+                    ? 'bg-primary text-primary-foreground shadow-lg'
+                    : 'text-amber-500 hover:bg-amber-500/10 hover:text-amber-400'
+                )}
+              >
+                <ShieldCheck className="h-5 w-5" />
+                Admin Panel
+              </Link>
+            )}
           </nav>
 
           {/* Logout */}
           <div className="border-t border-border p-4">
             <Link
               to="/"
-              onClick={() => setOpen(false)}
+              onClick={handleLogout}
               className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-sidebar-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
             >
               <LogOut className="h-5 w-5" />

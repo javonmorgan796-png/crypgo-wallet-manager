@@ -88,6 +88,13 @@ class ApiService {
     });
   }
 
+  async resendVerification(email: string) {
+    return this.request('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   async forgotPassword(email: string) {
     return this.request('/auth/forgot-password', {
       method: 'POST',
