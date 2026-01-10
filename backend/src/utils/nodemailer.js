@@ -1,19 +1,36 @@
 const nodemailer = require('nodemailer');
 
-// Mailtrap configuration
-const transporter = nodemailer.createTransport({
-  host: process.env.MAILTRAP_HOST || 'sandbox.smtp.mailtrap.io',
-  port: process.env.MAILTRAP_PORT || 2525,
-  auth: {
-    user: process.env.MAILTRAP_USER,
-    pass: process.env.MAILTRAP_PASS
+// Nodemailer configuration - supports Gmail, SMTP, or any email provider
+const createTransporter = () => {
+  // Check if using Gmail
+  if (process.env.EMAIL_SERVICE === 'gmail') {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS // Use App Password for Gmail
+      }
+    });
   }
-});
+  
+  // Default to custom SMTP configuration
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+};
+
+const transporter = createTransporter();
 
 const sendEmail = async ({ to, subject, html, text }) => {
   try {
     const info = await transporter.sendMail({
-      from: `"GreenBull Trading" <${process.env.FROM_EMAIL || 'noreply@greenbull.com'}>`,
+      from: `"GreenBull Trading" <${process.env.FROM_EMAIL || process.env.EMAIL_USER || 'noreply@greenbull.com'}>`,
       to,
       subject,
       text,
@@ -46,7 +63,8 @@ const emailTemplates = {
                     padding: 14px 30px; 
                     text-decoration: none; 
                     border-radius: 8px; 
-                    font-weight: bold;">
+                    font-weight: bold;
+                    display: inline-block;">
             Verify Email
           </a>
         </div>
@@ -75,7 +93,8 @@ const emailTemplates = {
                     padding: 14px 30px; 
                     text-decoration: none; 
                     border-radius: 8px; 
-                    font-weight: bold;">
+                    font-weight: bold;
+                    display: inline-block;">
             Reset Password
           </a>
         </div>
@@ -133,6 +152,40 @@ const emailTemplates = {
         <p>Your KYC verification has been <strong>${status}</strong>.</p>
         ${reason ? `<p>Reason: ${reason}</p>` : ''}
         <p>Log in to your account for more information.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 12px;">© ${new Date().getFullYear()} GreenBull Trading. All rights reserved.</p>
+      </div>
+    `
+  }),
+  
+  welcomeEmail: (name) => ({
+    subject: 'Welcome to GreenBull Trading!',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: #22c55e;">🎉 Welcome to GreenBull Trading!</h1>
+        </div>
+        <h2>Hi ${name},</h2>
+        <p>Thank you for verifying your email! Your account is now fully activated.</p>
+        <p>Here's what you can do next:</p>
+        <ul>
+          <li>Complete your KYC verification to unlock all features</li>
+          <li>Make your first deposit and start investing</li>
+          <li>Explore copy trading to follow successful traders</li>
+          <li>Invite friends and earn referral bonuses</li>
+        </ul>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard" 
+             style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+                    color: white; 
+                    padding: 14px 30px; 
+                    text-decoration: none; 
+                    border-radius: 8px; 
+                    font-weight: bold;
+                    display: inline-block;">
+            Go to Dashboard
+          </a>
+        </div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
         <p style="color: #999; font-size: 12px;">© ${new Date().getFullYear()} GreenBull Trading. All rights reserved.</p>
       </div>
