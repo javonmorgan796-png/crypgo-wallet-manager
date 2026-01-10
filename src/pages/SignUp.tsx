@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff, Mail, Lock, User, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import logo from '@/assets/logo.png';
 
 export default function SignUp() {
@@ -14,8 +15,13 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [signupComplete, setSignupComplete] = useState(false);
+  const [searchParams] = useSearchParams();
+  const referralCode = searchParams.get('ref');
+  
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signup } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,18 +35,81 @@ export default function SignUp() {
       return;
     }
 
+    if (password.length < 8) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 8 characters long.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulate signup
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const result = await signup(name, email, password);
+      
+      if (result.success) {
+        setSignupComplete(true);
+        toast({
+          title: 'Account created!',
+          description: 'Please check your email to verify your account.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to create account.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
       toast({
-        title: 'Account created!',
-        description: 'Welcome to Green Bull. Please log in to continue.',
+        title: 'Error',
+        description: 'Something went wrong. Please try again.',
+        variant: 'destructive',
       });
-      navigate('/login');
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Show success screen after signup
+  if (signupComplete) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8 bg-background">
+        <div className="w-full max-w-md text-center space-y-6">
+          <div className="mx-auto w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center">
+            <CheckCircle2 className="w-10 h-10 text-primary" />
+          </div>
+          <div>
+            <h1 className="font-display text-3xl font-bold text-foreground">Check Your Email</h1>
+            <p className="mt-2 text-muted-foreground">
+              We've sent a verification link to <strong>{email}</strong>
+            </p>
+          </div>
+          <div className="space-y-4 text-sm text-muted-foreground">
+            <p>Click the link in your email to verify your account and get started.</p>
+            <p>Didn't receive the email? Check your spam folder or request a new one.</p>
+          </div>
+          <div className="space-y-3">
+            <Button
+              onClick={() => navigate('/verify-email', { state: { email } })}
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              I've Verified My Email
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate('/login')}
+              className="w-full"
+            >
+              Go to Login
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -167,8 +236,21 @@ export default function SignUp() {
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating account...' : 'Create Account'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                'Create Account'
+              )}
             </Button>
+            
+            {referralCode && (
+              <p className="text-sm text-muted-foreground text-center">
+                🎁 You were referred! You'll receive a bonus after signing up.
+              </p>
+            )}
           </form>
 
           {/* Footer */}

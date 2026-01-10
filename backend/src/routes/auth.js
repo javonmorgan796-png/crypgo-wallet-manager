@@ -4,7 +4,7 @@ const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
-const { sendEmail, emailTemplates } = require('../utils/mailtrap');
+const { sendEmail, emailTemplates } = require('../utils/nodemailer');
 
 const router = express.Router();
 
