@@ -1,7 +1,7 @@
 // API Service for MongoDB Backend on Render.com
-// Update RENDER_API_URL with your actual Render.com backend URL when ready
+// Connected to live Render backend
 
-const RENDER_API_URL = import.meta.env.VITE_RENDER_API_URL || 'https://your-backend.onrender.com/api';
+const RENDER_API_URL = import.meta.env.VITE_RENDER_API_URL || 'https://greenbull-api.onrender.com/api';
 
 interface ApiResponse<T> {
   success: boolean;

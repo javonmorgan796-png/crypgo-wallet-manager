@@ -60,7 +60,7 @@ export function useWebSocketPrices() {
   }, []);
 
   const connect = useCallback(() => {
-    const wsUrl = import.meta.env.VITE_WS_URL;
+    const wsUrl = import.meta.env.VITE_WS_URL || 'wss://greenbull-api.onrender.com/ws/prices';
     
     // If no WebSocket URL configured, use fallback immediately
     if (!wsUrl) {
