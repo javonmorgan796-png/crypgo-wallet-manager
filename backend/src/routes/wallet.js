@@ -5,7 +5,7 @@ const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect, verifiedOnly } = require('../middleware/auth');
-const { sendEmail, emailTemplates } = require('../utils/mailtrap');
+const { sendEmail, emailTemplates } = require('../utils/nodemailer');
 
 const router = express.Router();
 

@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const { protect, adminOnly } = require('../middleware/auth');
-const { sendEmail, emailTemplates } = require('../utils/mailtrap');
+const { sendEmail, emailTemplates } = require('../utils/nodemailer');
 
 const router = express.Router();
 

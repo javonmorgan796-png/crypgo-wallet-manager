@@ -205,7 +205,7 @@ export function AdminNotifications() {
                     className="rounded border-gray-300"
                   />
                   <Mail className="h-4 w-4" />
-                  Email (Mailtrap)
+                  Email (Nodemailer)
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

@@ -1,7 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const { protect, verifiedOnly } = require('../middleware/auth');
-const { sendEmail, emailTemplates } = require('../utils/mailtrap');
+const { sendEmail, emailTemplates } = require('../utils/nodemailer');
 
 const router = express.Router();
 
