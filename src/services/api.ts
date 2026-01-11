@@ -74,10 +74,10 @@ class ApiService {
     return result;
   }
 
-  async signup(name: string, email: string, password: string) {
+  async signup(name: string, email: string, password: string, referralCode?: string) {
     return this.request<{ token: string; user: any }>('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, referralCode }),
     });
   }
 

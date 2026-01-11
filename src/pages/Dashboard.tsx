@@ -1,45 +1,63 @@
-import { ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Activity, Users } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Activity, Users, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { mockUser, mockInvestments, mockCopyTrades, mockTransactions } from '@/data/mockData';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { PortfolioChart } from '@/components/charts/PortfolioChart';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserData } from '@/hooks/useUserData';
+import { investmentPlans, mockTraders } from '@/data/mockData';
 
 export default function Dashboard() {
-  const activeInvestments = mockInvestments.filter(inv => inv.status === 'active');
-  const recentTransactions = mockTransactions.slice(0, 5);
+  const { user } = useAuth();
+  const { balance, totalProfit, totalInvested, transactions, isLoading } = useUserData();
+
+  // Get recent transactions (last 5)
+  const recentTransactions = transactions.slice(0, 5);
+
+  // Calculate active copy trades count (placeholder until we have real data)
+  const activeCopyTradesCount = 0;
 
   const portfolioData = [
     {
       title: 'Total Balance',
-      value: `$${mockUser.balance.toLocaleString()}`,
-      change: '+12.5%',
-      isPositive: true,
+      value: `$${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: balance > 0 ? '+' + ((totalProfit / (balance || 1)) * 100).toFixed(1) + '%' : '0%',
+      isPositive: totalProfit >= 0,
       icon: Wallet,
     },
     {
       title: 'Total Invested',
-      value: `$${mockUser.totalInvested.toLocaleString()}`,
-      change: '+8.2%',
+      value: `$${totalInvested.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: totalInvested > 0 ? 'Active' : 'None',
       isPositive: true,
       icon: TrendingUp,
     },
     {
       title: 'Total Profit',
-      value: `$${mockUser.totalProfit.toLocaleString()}`,
-      change: '+24.3%',
-      isPositive: true,
+      value: `$${totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: totalProfit > 0 ? '+' + ((totalProfit / (totalInvested || 1)) * 100).toFixed(1) + '%' : '0%',
+      isPositive: totalProfit >= 0,
       icon: Activity,
     },
     {
       title: 'Active Copy Trades',
-      value: mockCopyTrades.filter(ct => ct.status === 'active').length.toString(),
-      change: '2 traders',
+      value: activeCopyTradesCount.toString(),
+      change: activeCopyTradesCount > 0 ? `${activeCopyTradesCount} traders` : 'None',
       isPositive: true,
       icon: Users,
     },
   ];
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -48,7 +66,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, {mockUser.name}</p>
+            <p className="text-muted-foreground">Welcome back, {user?.name || 'User'}</p>
           </div>
           <div className="flex gap-3">
             <Link to="/investments">
@@ -90,7 +108,7 @@ export default function Dashboard() {
         <PortfolioChart />
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Active Investments */}
+          {/* Active Investments - Placeholder until we have investment data */}
           <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-display text-xl">Active Investments</CardTitle>
@@ -101,40 +119,18 @@ export default function Dashboard() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-4">
-              {activeInvestments.length > 0 ? (
-                activeInvestments.map((investment) => (
-                  <div
-                    key={investment.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-secondary/50"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{investment.planName}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Invested: ${investment.amount.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-primary">+{investment.roi}% ROI</p>
-                      <p className="text-sm text-muted-foreground">
-                        Expected: ${investment.expectedReturn.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No active investments</p>
-                  <Link to="/investments">
-                    <Button variant="link" className="text-primary mt-2">
-                      Start Investing
-                    </Button>
-                  </Link>
-                </div>
-              )}
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No active investments</p>
+                <Link to="/investments">
+                  <Button variant="link" className="text-primary mt-2">
+                    Start Investing
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Copy Trade Status */}
+          {/* Copy Trade Status - Placeholder */}
           <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-display text-xl">Copy Trade Status</CardTitle>
@@ -145,45 +141,14 @@ export default function Dashboard() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockCopyTrades.filter(ct => ct.status === 'active').length > 0 ? (
-                mockCopyTrades
-                  .filter((ct) => ct.status === 'active')
-                  .map((trade) => (
-                    <div
-                      key={trade.id}
-                      className="flex items-center justify-between p-4 rounded-lg bg-secondary/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${trade.traderName}`}
-                          alt={trade.traderName}
-                          className="h-10 w-10 rounded-full border border-border"
-                        />
-                        <div>
-                          <p className="font-medium text-foreground">{trade.traderName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Amount: ${trade.amount.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-primary">
-                          +${trade.profit.toLocaleString()}
-                        </p>
-                        <p className="text-sm text-primary">+{trade.profitPercentage}%</p>
-                      </div>
-                    </div>
-                  ))
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No active copy trades</p>
-                  <Link to="/copy-trade">
-                    <Button variant="link" className="text-primary mt-2">
-                      Find Traders
-                    </Button>
-                  </Link>
-                </div>
-              )}
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No active copy trades</p>
+                <Link to="/copy-trade">
+                  <Button variant="link" className="text-primary mt-2">
+                    Find Traders
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -200,56 +165,67 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentTransactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center justify-between py-3 border-b border-border last:border-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                        transaction.amount >= 0
-                          ? 'bg-primary/10 text-primary'
-                          : 'bg-destructive/10 text-destructive'
-                      }`}
-                    >
-                      {transaction.amount >= 0 ? (
-                        <ArrowDownRight className="h-5 w-5" />
-                      ) : (
-                        <ArrowUpRight className="h-5 w-5" />
-                      )}
+              {recentTransactions.length > 0 ? (
+                recentTransactions.map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className="flex items-center justify-between py-3 border-b border-border last:border-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                          transaction.amount >= 0
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-destructive/10 text-destructive'
+                        }`}
+                      >
+                        {transaction.amount >= 0 ? (
+                          <ArrowDownRight className="h-5 w-5" />
+                        ) : (
+                          <ArrowUpRight className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground capitalize">
+                          {transaction.type.replace('-', ' ')}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(transaction.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-foreground capitalize">
-                        {transaction.type.replace('-', ' ')}
+                    <div className="text-right">
+                      <p
+                        className={`font-semibold ${
+                          transaction.amount >= 0 ? 'text-primary' : 'text-foreground'
+                        }`}
+                      >
+                        {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toLocaleString()}
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(transaction.createdAt).toLocaleDateString()}
+                      <p
+                        className={`text-xs capitalize ${
+                          transaction.status === 'completed'
+                            ? 'text-primary'
+                            : transaction.status === 'pending'
+                            ? 'text-warning'
+                            : 'text-destructive'
+                        }`}
+                      >
+                        {transaction.status}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p
-                      className={`font-semibold ${
-                        transaction.amount >= 0 ? 'text-primary' : 'text-foreground'
-                      }`}
-                    >
-                      {transaction.amount >= 0 ? '+' : ''}${Math.abs(transaction.amount).toLocaleString()}
-                    </p>
-                    <p
-                      className={`text-xs capitalize ${
-                        transaction.status === 'completed'
-                          ? 'text-primary'
-                          : transaction.status === 'pending'
-                          ? 'text-warning'
-                          : 'text-destructive'
-                      }`}
-                    >
-                      {transaction.status}
-                    </p>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No transactions yet</p>
+                  <Link to="/wallet">
+                    <Button variant="link" className="text-primary mt-2">
+                      Make a Deposit
+                    </Button>
+                  </Link>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
