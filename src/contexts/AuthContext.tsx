@@ -9,6 +9,11 @@ interface User {
   isVerified: boolean;
   is2FAEnabled: boolean;
   kycStatus: 'none' | 'pending' | 'approved' | 'rejected';
+  balance: number;
+  totalProfit: number;
+  totalInvested: number;
+  avatar?: string;
+  referralCode?: string;
   createdAt: string;
 }
 
@@ -18,36 +23,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requires2FA?: boolean }>;
-  signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (name: string, email: string, password: string, referralCode?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   verify2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
   refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Mock user for demo purposes (remove when backend is ready)
-const mockUser: User = {
-  id: '1',
-  name: 'John Doe',
-  email: 'john@example.com',
-  role: 'user',
-  isVerified: true,
-  is2FAEnabled: false,
-  kycStatus: 'none',
-  createdAt: '2024-01-01',
-};
-
-const mockAdminUser: User = {
-  id: 'admin-1',
-  name: 'Admin User',
-  email: 'admin@greenbull.com',
-  role: 'admin',
-  isVerified: true,
-  is2FAEnabled: true,
-  kycStatus: 'approved',
-  createdAt: '2023-01-01',
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -64,25 +46,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const result = await api.getProfile();
         if (result.success && result.data) {
-          setUser(result.data);
+          setUser({
+            id: result.data.id || result.data._id,
+            name: result.data.name,
+            email: result.data.email,
+            role: result.data.role || 'user',
+            isVerified: result.data.isVerified || false,
+            is2FAEnabled: result.data.is2FAEnabled || false,
+            kycStatus: result.data.kycStatus || 'none',
+            balance: result.data.balance || 0,
+            totalProfit: result.data.totalProfit || 0,
+            totalInvested: result.data.totalInvested || 0,
+            avatar: result.data.avatar,
+            referralCode: result.data.referralCode,
+            createdAt: result.data.createdAt,
+          });
         } else {
-          // Demo mode: check for mock login
-          const mockLogin = localStorage.getItem('mock_user');
-          if (mockLogin === 'admin') {
-            setUser(mockAdminUser);
-          } else if (mockLogin === 'user') {
-            setUser(mockUser);
-          }
+          // Token invalid, clear it
+          api.clearToken();
         }
       } catch (error) {
         console.error('Auth check failed:', error);
-        // Demo mode fallback
-        const mockLogin = localStorage.getItem('mock_user');
-        if (mockLogin === 'admin') {
-          setUser(mockAdminUser);
-        } else if (mockLogin === 'user') {
-          setUser(mockUser);
-        }
+        api.clearToken();
       }
     }
     setIsLoading(false);
@@ -93,49 +78,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await api.login(email, password);
       
-      if (result.success) {
-        if (result.data?.user?.is2FAEnabled) {
+      if (result.success && result.data) {
+        if (result.data.user?.is2FAEnabled) {
           setPending2FA(true);
           return { success: true, requires2FA: true };
         }
-        setUser(result.data?.user);
+        
+        // Set user data from login response
+        const userData = result.data.user;
+        setUser({
+          id: userData.id || userData._id,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role || 'user',
+          isVerified: userData.isVerified || false,
+          is2FAEnabled: userData.is2FAEnabled || false,
+          kycStatus: userData.kycStatus || 'none',
+          balance: userData.balance || 0,
+          totalProfit: userData.totalProfit || 0,
+          totalInvested: userData.totalInvested || 0,
+          avatar: userData.avatar,
+          referralCode: userData.referralCode,
+          createdAt: userData.createdAt,
+        });
         return { success: true };
       }
       
-      // Demo mode: allow mock login
-      if (email === 'admin@greenbull.com' && password === 'admin123') {
-        localStorage.setItem('auth_token', 'mock-admin-token');
-        localStorage.setItem('mock_user', 'admin');
-        setUser(mockAdminUser);
-        return { success: true };
-      }
-      
-      // Demo mode: regular user
-      localStorage.setItem('auth_token', 'mock-user-token');
-      localStorage.setItem('mock_user', 'user');
-      setUser(mockUser);
-      return { success: true };
-      
+      return { success: false, error: result.error || 'Login failed. Please check your credentials.' };
     } catch (error) {
+      console.error('Login error:', error);
       return { success: false, error: 'Login failed. Please try again.' };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const signup = async (name: string, email: string, password: string) => {
+  const signup = async (name: string, email: string, password: string, referralCode?: string) => {
     setIsLoading(true);
     try {
-      const result = await api.signup(name, email, password);
+      const result = await api.signup(name, email, password, referralCode);
       
       if (result.success) {
         return { success: true };
       }
       
-      // Demo mode: simulate successful signup
-      return { success: true };
-      
+      return { success: false, error: result.error || 'Signup failed. Please try again.' };
     } catch (error) {
+      console.error('Signup error:', error);
       return { success: false, error: 'Signup failed. Please try again.' };
     } finally {
       setIsLoading(false);
@@ -160,7 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     api.clearToken();
-    localStorage.removeItem('mock_user');
     setUser(null);
     setPending2FA(false);
   };
@@ -169,7 +157,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await api.getProfile();
       if (result.success && result.data) {
-        setUser(result.data);
+        setUser({
+          id: result.data.id || result.data._id,
+          name: result.data.name,
+          email: result.data.email,
+          role: result.data.role || 'user',
+          isVerified: result.data.isVerified || false,
+          is2FAEnabled: result.data.is2FAEnabled || false,
+          kycStatus: result.data.kycStatus || 'none',
+          balance: result.data.balance || 0,
+          totalProfit: result.data.totalProfit || 0,
+          totalInvested: result.data.totalInvested || 0,
+          avatar: result.data.avatar,
+          referralCode: result.data.referralCode,
+          createdAt: result.data.createdAt,
+        });
       }
     } catch (error) {
       console.error('Failed to refresh user:', error);

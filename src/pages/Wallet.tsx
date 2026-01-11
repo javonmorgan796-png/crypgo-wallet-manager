@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin, Upload, FileImage } from 'lucide-react';
-import { mockUser } from '@/data/mockData';
+import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin, Upload, FileImage, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUserData } from '@/hooks/useUserData';
+import api from '@/services/api';
 
 const cryptoOptions = [
   { value: 'btc', label: 'Bitcoin (BTC)', address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' },
@@ -17,6 +19,9 @@ const cryptoOptions = [
 ];
 
 export default function WalletPage() {
+  const { user, refreshUser } = useAuth();
+  const { balance, isLoading: isDataLoading, refresh: refreshData } = useUserData();
+  
   const [selectedCrypto, setSelectedCrypto] = useState('usdt-trc20');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
@@ -25,9 +30,11 @@ export default function WalletPage() {
   const [depositAmount, setDepositAmount] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto);
+  const userBalance = user?.balance ?? balance;
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -52,7 +59,7 @@ export default function WalletPage() {
     }
   };
 
-  const handleDepositSubmit = () => {
+  const handleDepositSubmit = async () => {
     if (!depositAmount || parseFloat(depositAmount) < 100) {
       toast.error('Minimum deposit is $100');
       return;
@@ -61,18 +68,36 @@ export default function WalletPage() {
       toast.error('Please upload your payment receipt');
       return;
     }
-    toast.success(`Deposit of $${depositAmount} submitted! We'll verify your payment shortly.`);
-    setDepositAmount('');
-    setReceiptFile(null);
-    setReceiptPreview(null);
+
+    setIsSubmitting(true);
+    try {
+      const result = await api.deposit(parseFloat(depositAmount), selectedCrypto, receiptFile);
+      
+      if (result.success) {
+        toast.success(`Deposit of $${depositAmount} submitted! We'll verify your payment shortly.`);
+        setDepositAmount('');
+        setReceiptFile(null);
+        setReceiptPreview(null);
+        // Refresh user data
+        await refreshUser();
+        await refreshData();
+      } else {
+        toast.error(result.error || 'Failed to submit deposit request');
+      }
+    } catch (error) {
+      console.error('Deposit error:', error);
+      toast.error('Failed to submit deposit. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleWithdraw = () => {
+  const handleWithdraw = async () => {
     if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
-    if (parseFloat(withdrawAmount) > mockUser.balance) {
+    if (parseFloat(withdrawAmount) > userBalance) {
       toast.error('Insufficient balance');
       return;
     }
@@ -80,9 +105,27 @@ export default function WalletPage() {
       toast.error('Please enter your wallet address');
       return;
     }
-    toast.success(`Withdrawal request of $${withdrawAmount} in ${withdrawCrypto.toUpperCase()} submitted!`);
-    setWithdrawAmount('');
-    setWithdrawAddress('');
+
+    setIsSubmitting(true);
+    try {
+      const result = await api.withdraw(parseFloat(withdrawAmount), withdrawAddress, withdrawCrypto);
+      
+      if (result.success) {
+        toast.success(`Withdrawal request of $${withdrawAmount} in ${withdrawCrypto.toUpperCase()} submitted!`);
+        setWithdrawAmount('');
+        setWithdrawAddress('');
+        // Refresh user data
+        await refreshUser();
+        await refreshData();
+      } else {
+        toast.error(result.error || 'Failed to submit withdrawal request');
+      }
+    } catch (error) {
+      console.error('Withdrawal error:', error);
+      toast.error('Failed to submit withdrawal. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -100,9 +143,16 @@ export default function WalletPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Available Balance</p>
-                <p className="text-4xl font-bold text-foreground font-display">
-                  ${mockUser.balance.toLocaleString()}
-                </p>
+                {isDataLoading ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span className="text-muted-foreground">Loading...</span>
+                  </div>
+                ) : (
+                  <p className="text-4xl font-bold text-foreground font-display">
+                    ${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                )}
               </div>
               <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
                 <Wallet className="h-8 w-8 text-primary" />
@@ -243,9 +293,19 @@ export default function WalletPage() {
                   onClick={handleDepositSubmit}
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                   size="lg"
+                  disabled={isSubmitting}
                 >
-                  <FileImage className="h-4 w-4 mr-2" />
-                  Submit Deposit Request
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <FileImage className="h-4 w-4 mr-2" />
+                      Submit Deposit Request
+                    </>
+                  )}
                 </Button>
 
                 <div className="p-4 rounded-lg bg-muted/50 border border-border">
@@ -310,7 +370,7 @@ export default function WalletPage() {
                     className="bg-secondary border-border"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Available: ${mockUser.balance.toLocaleString()}
+                    Available: ${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
 
@@ -321,7 +381,7 @@ export default function WalletPage() {
                       variant="outline"
                       size="sm"
                       className="flex-1 border-border hover:bg-primary/10 hover:text-primary"
-                      onClick={() => setWithdrawAmount((mockUser.balance * percent / 100).toFixed(2))}
+                      onClick={() => setWithdrawAmount((userBalance * percent / 100).toFixed(2))}
                     >
                       {percent}%
                     </Button>
@@ -332,9 +392,19 @@ export default function WalletPage() {
                   onClick={handleWithdraw} 
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                   size="lg"
+                  disabled={isSubmitting}
                 >
-                  <ArrowUpRight className="h-4 w-4 mr-2" />
-                  Request Withdrawal
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpRight className="h-4 w-4 mr-2" />
+                      Request Withdrawal
+                    </>
+                  )}
                 </Button>
 
                 <p className="text-xs text-center text-muted-foreground">

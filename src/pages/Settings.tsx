@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, Lock, Bell, Camera } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Lock, Bell, Camera, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,19 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TwoFactorSetup } from '@/components/auth/TwoFactorSetup';
-import { mockUser } from '@/data/mockData';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
 
 export default function Settings() {
-  const [name, setName] = useState(mockUser.name);
-  const [email, setEmail] = useState(mockUser.email);
+  const { user, refreshUser } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -24,18 +30,91 @@ export default function Settings() {
   });
   const { toast } = useToast();
 
-  const handleSaveProfile = () => {
-    toast({
-      title: 'Profile updated',
-      description: 'Your profile has been updated successfully.',
-    });
+  // Initialize form with user data
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+      setEmail(user.email || '');
+      setIs2FAEnabled(user.is2FAEnabled || false);
+    }
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      const result = await api.updateProfile({ name, email });
+      
+      if (result.success) {
+        await refreshUser();
+        toast({
+          title: 'Profile updated',
+          description: 'Your profile has been updated successfully.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to update profile',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update profile. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSavePassword = () => {
-    toast({
-      title: 'Password updated',
-      description: 'Your password has been changed successfully.',
-    });
+  const handleSavePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'New passwords do not match',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 8 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await api.changePassword(currentPassword, newPassword);
+      
+      if (result.success) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        toast({
+          title: 'Password updated',
+          description: 'Your password has been changed successfully.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to change password',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to change password. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveNotifications = () => {
@@ -44,6 +123,8 @@ export default function Settings() {
       description: 'Your notification preferences have been updated.',
     });
   };
+
+  const avatarUrl = user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'user'}`;
 
   return (
     <DashboardLayout>
@@ -82,8 +163,8 @@ export default function Settings() {
                 <div className="flex items-center gap-6">
                   <div className="relative">
                     <img
-                      src={mockUser.avatar}
-                      alt={mockUser.name}
+                      src={avatarUrl}
+                      alt={user?.name || 'User'}
                       className="h-24 w-24 rounded-full border-4 border-primary"
                     />
                     <button className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:bg-primary/90 transition-colors">
@@ -91,9 +172,12 @@ export default function Settings() {
                     </button>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">{mockUser.name}</h3>
+                    <h3 className="font-semibold text-foreground">{user?.name || 'User'}</h3>
                     <p className="text-sm text-muted-foreground">
-                      Member since {new Date(mockUser.createdAt).toLocaleDateString()}
+                      Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Balance: ${(user?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </div>
@@ -127,8 +211,16 @@ export default function Settings() {
                   <Button
                     onClick={handleSaveProfile}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={isSaving}
                   >
-                    Save Changes
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -151,6 +243,8 @@ export default function Settings() {
                         id="current-password"
                         type="password"
                         placeholder="••••••••"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
                         className="bg-secondary border-border"
                       />
                     </div>
@@ -160,6 +254,8 @@ export default function Settings() {
                         id="new-password"
                         type="password"
                         placeholder="••••••••"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
                         className="bg-secondary border-border"
                       />
                     </div>
@@ -169,6 +265,8 @@ export default function Settings() {
                         id="confirm-password"
                         type="password"
                         placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         className="bg-secondary border-border"
                       />
                     </div>
@@ -178,8 +276,16 @@ export default function Settings() {
                     <Button
                       onClick={handleSavePassword}
                       className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      disabled={isSaving}
                     >
-                      Update Password
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        'Update Password'
+                      )}
                     </Button>
                   </div>
                 </CardContent>

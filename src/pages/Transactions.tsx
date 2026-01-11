@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowUpRight, ArrowDownRight, Download, Filter, Search, Calendar } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ArrowUpRight, ArrowDownRight, Download, Filter, Search, Calendar, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,10 +15,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockTransactions } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
+
+interface Transaction {
+  id: string;
+  userId: string;
+  type: 'deposit' | 'withdrawal' | 'investment' | 'profit' | 'copy-trade' | 'referral';
+  amount: number;
+  status: 'pending' | 'completed' | 'failed';
+  description: string;
+  createdAt: string;
+  reference?: string;
+}
 
 export default function Transactions() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,24 +39,91 @@ export default function Transactions() {
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const { toast } = useToast();
 
-  const filteredTransactions = mockTransactions.filter((transaction) => {
-    const matchesType = filterType === 'all' || transaction.type === filterType;
-    const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus;
+  const fetchTransactions = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const filters: any = {};
+      if (filterType !== 'all') filters.type = filterType;
+      if (filterStatus !== 'all') filters.status = filterStatus;
+      if (dateFrom) filters.dateFrom = dateFrom.toISOString();
+      if (dateTo) filters.dateTo = dateTo.toISOString();
+
+      const result = await api.getTransactions(filters);
+      
+      if (result.success && result.data) {
+        const txData = Array.isArray(result.data) 
+          ? result.data 
+          : (result.data as any).transactions || [];
+        
+        setTransactions(txData.map((tx: any) => ({
+          id: tx._id || tx.id,
+          userId: tx.userId,
+          type: tx.type,
+          amount: tx.amount,
+          status: tx.status,
+          description: tx.description || `${tx.type} transaction`,
+          createdAt: tx.createdAt,
+          reference: tx.reference,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load transactions',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filterType, filterStatus, dateFrom, dateTo, toast]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const filteredTransactions = transactions.filter((transaction) => {
     const matchesSearch =
       transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       transaction.reference?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const transactionDate = new Date(transaction.createdAt);
-    const matchesDateFrom = !dateFrom || transactionDate >= dateFrom;
-    const matchesDateTo = !dateTo || transactionDate <= dateTo;
-
-    return matchesType && matchesStatus && matchesSearch && matchesDateFrom && matchesDateTo;
+    return matchesSearch;
   });
 
   const handleExport = () => {
+    if (transactions.length === 0) {
+      toast({
+        title: 'No data to export',
+        description: 'There are no transactions to export.',
+      });
+      return;
+    }
+
+    // Create CSV content
+    const headers = ['Date', 'Type', 'Description', 'Amount', 'Status', 'Reference'];
+    const rows = transactions.map(t => [
+      new Date(t.createdAt).toLocaleString(),
+      t.type,
+      t.description,
+      t.amount.toString(),
+      t.status,
+      t.reference || ''
+    ]);
+    
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+
     toast({
-      title: 'Export started',
-      description: 'Your transaction history will be downloaded shortly.',
+      title: 'Export complete',
+      description: 'Your transaction history has been downloaded.',
     });
   };
 
@@ -87,17 +167,15 @@ export default function Transactions() {
     }
   };
 
-  // Calculate totals
+  // Calculate totals from real data
   const totals = {
-    deposits: mockTransactions
+    deposits: transactions
       .filter((t) => t.type === 'deposit' && t.status === 'completed')
-      .reduce((sum, t) => sum + t.amount, 0),
-    withdrawals: Math.abs(
-      mockTransactions
-        .filter((t) => t.type === 'withdrawal' && t.status === 'completed')
-        .reduce((sum, t) => sum + t.amount, 0)
-    ),
-    profits: mockTransactions
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0),
+    withdrawals: transactions
+      .filter((t) => t.type === 'withdrawal' && t.status === 'completed')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0),
+    profits: transactions
       .filter((t) => t.type === 'profit' && t.status === 'completed')
       .reduce((sum, t) => sum + t.amount, 0),
   };
@@ -132,7 +210,7 @@ export default function Transactions() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Deposits</p>
                   <p className="text-2xl font-bold text-foreground">
-                    ${totals.deposits.toLocaleString()}
+                    ${totals.deposits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -147,7 +225,7 @@ export default function Transactions() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Withdrawals</p>
                   <p className="text-2xl font-bold text-foreground">
-                    ${totals.withdrawals.toLocaleString()}
+                    ${totals.withdrawals.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -162,7 +240,7 @@ export default function Transactions() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Profits</p>
                   <p className="text-2xl font-bold text-primary">
-                    +${totals.profits.toLocaleString()}
+                    +${totals.profits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
               </div>
@@ -268,65 +346,71 @@ export default function Transactions() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {filteredTransactions.length > 0 ? (
-                filteredTransactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex flex-col md:flex-row md:items-center justify-between py-4 px-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`h-12 w-12 rounded-full flex items-center justify-center ${
-                          transaction.amount >= 0
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-orange-500/10 text-orange-500'
-                        }`}
-                      >
-                        {transaction.amount >= 0 ? (
-                          <ArrowDownRight className="h-6 w-6" />
-                        ) : (
-                          <ArrowUpRight className="h-6 w-6" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-foreground">{transaction.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(transaction.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 md:gap-6">
-                      <Badge variant="outline" className={getTypeColor(transaction.type)}>
-                        {transaction.type.replace('-', ' ')}
-                      </Badge>
-                      <Badge variant="outline" className={`capitalize ${getStatusColor(transaction.status)} border-current/30 bg-current/10`}>
-                        {transaction.status}
-                      </Badge>
-                      <div className="text-right min-w-[100px]">
-                        <p
-                          className={`font-semibold ${
-                            transaction.amount >= 0 ? 'text-primary' : 'text-foreground'
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredTransactions.length > 0 ? (
+                  filteredTransactions.map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex flex-col md:flex-row md:items-center justify-between py-4 px-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`h-12 w-12 rounded-full flex items-center justify-center ${
+                            transaction.amount >= 0
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-orange-500/10 text-orange-500'
                           }`}
                         >
-                          {transaction.amount >= 0 ? '+' : ''}$
-                          {Math.abs(transaction.amount).toLocaleString()}
-                        </p>
+                          {transaction.amount >= 0 ? (
+                            <ArrowDownRight className="h-6 w-6" />
+                          ) : (
+                            <ArrowUpRight className="h-6 w-6" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{transaction.description}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(transaction.createdAt).toLocaleString()}
+                          </p>
+                        </div>
                       </div>
-                      {transaction.reference && (
-                        <p className="text-xs text-muted-foreground font-mono">
-                          {transaction.reference}
-                        </p>
-                      )}
+                      <div className="flex flex-wrap items-center gap-4 md:gap-6">
+                        <Badge variant="outline" className={getTypeColor(transaction.type)}>
+                          {transaction.type.replace('-', ' ')}
+                        </Badge>
+                        <Badge variant="outline" className={`capitalize ${getStatusColor(transaction.status)} border-current/30 bg-current/10`}>
+                          {transaction.status}
+                        </Badge>
+                        <div className="text-right min-w-[100px]">
+                          <p
+                            className={`font-semibold ${
+                              transaction.amount >= 0 ? 'text-primary' : 'text-foreground'
+                            }`}
+                          >
+                            {transaction.amount >= 0 ? '+' : ''}$
+                            {Math.abs(transaction.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        {transaction.reference && (
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {transaction.reference}
+                          </p>
+                        )}
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground">No transactions found</p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">No transactions found</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
