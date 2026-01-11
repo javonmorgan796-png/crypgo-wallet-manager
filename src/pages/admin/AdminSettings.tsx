@@ -28,8 +28,9 @@ export function AdminSettings() {
   const [minDeposit, setMinDeposit] = useState('100');
   const [minWithdrawal, setMinWithdrawal] = useState('50');
 
-  // Email settings
-  const [mailtrapApiToken, setMailtrapApiToken] = useState('********');
+  // Email settings (Nodemailer)
+  const [emailUser, setEmailUser] = useState('********');
+  const [emailPass, setEmailPass] = useState('********');
   const [senderEmail, setSenderEmail] = useState('noreply@greenbull.com');
   const [senderName, setSenderName] = useState('Green Bull');
 
@@ -65,7 +66,7 @@ export function AdminSettings() {
           </TabsTrigger>
           <TabsTrigger value="email">
             <Mail className="h-4 w-4 mr-2" />
-            Email (Mailtrap)
+            Email (Nodemailer)
           </TabsTrigger>
           <TabsTrigger value="security">
             <Shield className="h-4 w-4 mr-2" />
@@ -169,31 +170,41 @@ export function AdminSettings() {
         <TabsContent value="email">
           <Card>
             <CardHeader>
-              <CardTitle>Mailtrap Configuration</CardTitle>
+              <CardTitle>Nodemailer Configuration</CardTitle>
               <CardDescription>
-                Configure email notifications using Mailtrap
+                Configure email notifications using Nodemailer (Gmail or SMTP)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <p className="text-sm text-blue-500">
-                  <strong>Note:</strong> Your Mailtrap API token is stored securely. 
-                  The token shown below is masked for security.
+                  <strong>Note:</strong> Your email credentials are stored securely on Render.com. 
+                  Configure EMAIL_USER and EMAIL_PASS in your environment variables.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="mailtrapToken">Mailtrap API Token</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="emailUser">Email User (Gmail)</Label>
                   <Input
-                    id="mailtrapToken"
+                    id="emailUser"
+                    type="email"
+                    value={emailUser}
+                    onChange={(e) => setEmailUser(e.target.value)}
+                    placeholder="your_email@gmail.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="emailPass">Email App Password</Label>
+                  <Input
+                    id="emailPass"
                     type="password"
-                    value={mailtrapApiToken}
-                    onChange={(e) => setMailtrapApiToken(e.target.value)}
-                    placeholder="Enter new token to update..."
+                    value={emailPass}
+                    onChange={(e) => setEmailPass(e.target.value)}
+                    placeholder="Enter app password..."
                   />
                   <p className="text-xs text-muted-foreground">
-                    Leave blank to keep existing token
+                    Use Gmail App Password, not regular password
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -346,7 +357,9 @@ export function AdminSettings() {
                   <ul className="text-sm space-y-2 font-mono">
                     <li className="p-2 bg-muted rounded">MONGODB_URI</li>
                     <li className="p-2 bg-muted rounded">JWT_SECRET</li>
-                    <li className="p-2 bg-muted rounded">MAILTRAP_API_TOKEN</li>
+                    <li className="p-2 bg-muted rounded">EMAIL_USER</li>
+                    <li className="p-2 bg-muted rounded">EMAIL_PASS</li>
+                    <li className="p-2 bg-muted rounded">FROM_EMAIL</li>
                   </ul>
                 </div>
               </div>
