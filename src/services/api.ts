@@ -226,6 +226,32 @@ class ApiService {
     return this.request<{ code: string; referrals: any[]; earnings: number }>('/referral/info');
   }
 
+  // Investments
+  async getInvestmentPlans() {
+    return this.request<any[]>('/investments/plans');
+  }
+
+  async getMyInvestments() {
+    return this.request<any[]>('/investments/my-investments');
+  }
+
+  async createInvestment(planId: string, amount: number) {
+    return this.request('/investments/create', {
+      method: 'POST',
+      body: JSON.stringify({ planId, amount }),
+    });
+  }
+
+  async getInvestmentStats() {
+    return this.request<any>('/investments/stats');
+  }
+
+  async cancelInvestment(id: string) {
+    return this.request(`/investments/${id}/cancel`, {
+      method: 'POST',
+    });
+  }
+
   // Admin endpoints
   async adminGetUsers(page = 1, limit = 20) {
     return this.request<{ users: any[]; total: number }>(`/admin/users?page=${page}&limit=${limit}`);

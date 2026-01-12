@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,62 +29,132 @@ import {
   XCircle, 
   Clock,
   Eye,
-  ExternalLink
+  ExternalLink,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
 
-// Mock data
-const mockTransactions = [
-  { id: '1', type: 'deposit', userId: 'u1', userName: 'John Doe', amount: 5000, method: 'BTC', status: 'pending', receipt: '/placeholder.svg', createdAt: '2024-12-05T10:30:00' },
-  { id: '2', type: 'withdrawal', userId: 'u2', userName: 'Jane Smith', amount: 2500, method: 'ETH', address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...', status: 'pending', createdAt: '2024-12-05T09:15:00' },
-  { id: '3', type: 'deposit', userId: 'u3', userName: 'Bob Wilson', amount: 10000, method: 'USDT', status: 'pending', receipt: '/placeholder.svg', createdAt: '2024-12-04T16:45:00' },
-  { id: '4', type: 'withdrawal', userId: 'u4', userName: 'Alice Brown', amount: 1500, method: 'BTC', address: '3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5...', status: 'pending', createdAt: '2024-12-04T14:20:00' },
-  { id: '5', type: 'deposit', userId: 'u5', userName: 'Charlie Davis', amount: 3000, method: 'BTC', status: 'completed', receipt: '/placeholder.svg', createdAt: '2024-12-03T11:00:00' },
-];
+interface Transaction {
+  _id: string;
+  type: 'deposit' | 'withdrawal';
+  user: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  amount: number;
+  method: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  receiptUrl?: string;
+  withdrawalAddress?: string;
+  createdAt: string;
+  rejectionReason?: string;
+}
 
 export function AdminTransactions() {
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState(mockTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('pending');
-  const [selectedTransaction, setSelectedTransaction] = useState<typeof mockTransactions[0] | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [viewingReceipt, setViewingReceipt] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const fetchTransactions = async () => {
+    setIsLoading(true);
+    try {
+      const status = activeTab === 'pending' ? 'pending' : undefined;
+      const type = activeTab === 'deposits' ? 'deposit' : activeTab === 'withdrawals' ? 'withdrawal' : undefined;
+      
+      const result = await api.adminGetTransactions({ status, type });
+      
+      if (result.success && result.data) {
+        setTransactions(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch transactions",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [activeTab]);
 
   const filteredTransactions = transactions.filter(tx => {
-    const matchesSearch = tx.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tx.id.includes(searchQuery);
+    const matchesSearch = tx.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx._id.includes(searchQuery);
     
-    if (activeTab === 'pending') return matchesSearch && tx.status === 'pending';
-    if (activeTab === 'deposits') return matchesSearch && tx.type === 'deposit';
-    if (activeTab === 'withdrawals') return matchesSearch && tx.type === 'withdrawal';
     return matchesSearch;
   });
 
-  const handleApprove = (id: string) => {
-    setTransactions(transactions.map(tx => 
-      tx.id === id ? { ...tx, status: 'completed' } : tx
-    ));
-    toast({
-      title: "Transaction Approved",
-      description: "User has been notified of the approval",
-    });
+  const pendingCount = transactions.filter(t => t.status === 'pending').length;
+
+  const handleApprove = async (id: string) => {
+    setProcessingId(id);
+    try {
+      const result = await api.adminApproveTransaction(id);
+      
+      if (result.success) {
+        toast({
+          title: "Transaction Approved",
+          description: "User has been notified and their balance updated",
+        });
+        fetchTransactions();
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve transaction",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!selectedTransaction) return;
     
-    setTransactions(transactions.map(tx => 
-      tx.id === selectedTransaction.id ? { ...tx, status: 'rejected' } : tx
-    ));
-    toast({
-      title: "Transaction Rejected",
-      description: "User has been notified with the rejection reason",
-    });
-    setShowRejectDialog(false);
-    setRejectReason('');
-    setSelectedTransaction(null);
+    setProcessingId(selectedTransaction._id);
+    try {
+      const result = await api.adminRejectTransaction(selectedTransaction._id, rejectReason);
+      
+      if (result.success) {
+        toast({
+          title: "Transaction Rejected",
+          description: "User has been notified with the rejection reason",
+        });
+        fetchTransactions();
+        setShowRejectDialog(false);
+        setRejectReason('');
+        setSelectedTransaction(null);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject transaction",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -93,18 +163,35 @@ export function AdminTransactions() {
         return <Badge className="bg-green-500/10 text-green-500"><CheckCircle className="h-3 w-3 mr-1" />Completed</Badge>;
       case 'pending':
         return <Badge className="bg-yellow-500/10 text-yellow-500"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
-      case 'rejected':
+      case 'failed':
         return <Badge className="bg-red-500/10 text-red-500"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
+  const getMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      'crypto_btc': 'Bitcoin',
+      'crypto_eth': 'Ethereum',
+      'crypto_usdt': 'USDT',
+      'bank_transfer': 'Bank Transfer',
+      'card': 'Card'
+    };
+    return labels[method] || method;
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">Transaction Management</h2>
-        <p className="text-muted-foreground">Review and approve deposits and withdrawals</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold">Transaction Management</h2>
+          <p className="text-muted-foreground">Review and approve deposits and withdrawals</p>
+        </div>
+        <Button variant="outline" onClick={fetchTransactions} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       <Card>
@@ -114,9 +201,11 @@ export function AdminTransactions() {
               <TabsList>
                 <TabsTrigger value="pending">
                   Pending
-                  <Badge variant="secondary" className="ml-2">
-                    {transactions.filter(t => t.status === 'pending').length}
-                  </Badge>
+                  {pendingCount > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {pendingCount}
+                    </Badge>
+                  )}
                 </TabsTrigger>
                 <TabsTrigger value="deposits">Deposits</TabsTrigger>
                 <TabsTrigger value="withdrawals">Withdrawals</TabsTrigger>
@@ -136,101 +225,120 @@ export function AdminTransactions() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransactions.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {tx.type === 'deposit' ? (
-                        <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                          <ArrowDownRight className="h-4 w-4 text-green-500" />
-                        </div>
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center">
-                          <ArrowUpRight className="h-4 w-4 text-red-500" />
-                        </div>
-                      )}
-                      <span className="capitalize">{tx.type}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <p className="font-medium">{tx.userName}</p>
-                  </TableCell>
-                  <TableCell className="font-medium">${tx.amount.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{tx.method}</Badge>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(tx.status)}</TableCell>
-                  <TableCell>{new Date(tx.createdAt).toLocaleString()}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {tx.type === 'deposit' && tx.receipt && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            setSelectedTransaction(tx);
-                            setViewingReceipt(true);
-                          }}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          Receipt
-                        </Button>
-                      )}
-                      {tx.type === 'withdrawal' && tx.address && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => {
-                            navigator.clipboard.writeText(tx.address!);
-                            toast({ title: "Address copied" });
-                          }}
-                        >
-                          <ExternalLink className="h-4 w-4 mr-1" />
-                          Address
-                        </Button>
-                      )}
-                      {tx.status === 'pending' && (
-                        <>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No transactions found
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.map((tx) => (
+                  <TableRow key={tx._id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {tx.type === 'deposit' ? (
+                          <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                            <ArrowDownRight className="h-4 w-4 text-green-500" />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center">
+                            <ArrowUpRight className="h-4 w-4 text-red-500" />
+                          </div>
+                        )}
+                        <span className="capitalize">{tx.type}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium">{tx.user?.name || 'Unknown'}</p>
+                      <p className="text-sm text-muted-foreground">{tx.user?.email || ''}</p>
+                    </TableCell>
+                    <TableCell className="font-medium">${tx.amount.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{getMethodLabel(tx.method)}</Badge>
+                    </TableCell>
+                    <TableCell>{getStatusBadge(tx.status)}</TableCell>
+                    <TableCell>{new Date(tx.createdAt).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {tx.type === 'deposit' && tx.receiptUrl && (
                           <Button 
-                            size="sm"
-                            className="bg-green-500 hover:bg-green-600"
-                            onClick={() => handleApprove(tx.id)}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button 
-                            variant="destructive" 
+                            variant="outline" 
                             size="sm"
                             onClick={() => {
                               setSelectedTransaction(tx);
-                              setShowRejectDialog(true);
+                              setViewingReceipt(true);
                             }}
                           >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject
+                            <Eye className="h-4 w-4 mr-1" />
+                            Receipt
                           </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                        )}
+                        {tx.type === 'withdrawal' && tx.withdrawalAddress && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(tx.withdrawalAddress!);
+                              toast({ title: "Address copied" });
+                            }}
+                          >
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            Address
+                          </Button>
+                        )}
+                        {tx.status === 'pending' && (
+                          <>
+                            <Button 
+                              size="sm"
+                              className="bg-green-500 hover:bg-green-600"
+                              onClick={() => handleApprove(tx._id)}
+                              disabled={processingId === tx._id}
+                            >
+                              {processingId === tx._id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-4 w-4 mr-1" />
+                                  Approve
+                                </>
+                              )}
+                            </Button>
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedTransaction(tx);
+                                setShowRejectDialog(true);
+                              }}
+                              disabled={processingId === tx._id}
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -240,21 +348,24 @@ export function AdminTransactions() {
           <DialogHeader>
             <DialogTitle>Payment Receipt</DialogTitle>
             <DialogDescription>
-              Deposit receipt from {selectedTransaction?.userName}
+              Deposit receipt from {selectedTransaction?.user?.name}
             </DialogDescription>
           </DialogHeader>
           
           <div className="py-4">
             <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
               <img 
-                src={selectedTransaction?.receipt} 
+                src={selectedTransaction?.receiptUrl?.startsWith('http') 
+                  ? selectedTransaction.receiptUrl 
+                  : `https://greenbull-api.onrender.com${selectedTransaction?.receiptUrl}`
+                } 
                 alt="Payment Receipt"
                 className="w-full h-full object-cover"
               />
             </div>
             <div className="mt-4 space-y-2">
               <p><strong>Amount:</strong> ${selectedTransaction?.amount.toLocaleString()}</p>
-              <p><strong>Method:</strong> {selectedTransaction?.method}</p>
+              <p><strong>Method:</strong> {selectedTransaction && getMethodLabel(selectedTransaction.method)}</p>
               <p><strong>Date:</strong> {selectedTransaction && new Date(selectedTransaction.createdAt).toLocaleString()}</p>
             </div>
           </div>
@@ -263,6 +374,17 @@ export function AdminTransactions() {
             <Button variant="outline" onClick={() => setViewingReceipt(false)}>
               Close
             </Button>
+            {selectedTransaction?.status === 'pending' && (
+              <Button 
+                className="bg-green-500 hover:bg-green-600"
+                onClick={() => {
+                  handleApprove(selectedTransaction._id);
+                  setViewingReceipt(false);
+                }}
+              >
+                Approve
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -294,9 +416,13 @@ export function AdminTransactions() {
             <Button 
               variant="destructive"
               onClick={handleReject}
-              disabled={!rejectReason.trim()}
+              disabled={!rejectReason.trim() || processingId === selectedTransaction?._id}
             >
-              Reject Transaction
+              {processingId === selectedTransaction?._id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Reject Transaction'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

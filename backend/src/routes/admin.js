@@ -2,8 +2,10 @@ const express = require('express');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
+const Investment = require('../models/Investment');
 const { protect, adminOnly } = require('../middleware/auth');
 const { sendEmail, emailTemplates } = require('../utils/nodemailer');
+const { notifyBalanceUpdate } = require('../websocket/balanceUpdates');
 
 const router = express.Router();
 
@@ -271,21 +273,43 @@ router.post('/transactions/:id/approve', async (req, res, next) => {
       });
     }
     
+    if (transaction.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction has already been processed'
+      });
+    }
+    
     transaction.status = 'completed';
     transaction.processedBy = req.user._id;
     transaction.processedAt = new Date();
     await transaction.save();
     
+    let newBalance = transaction.user.balance;
+    
     // Update user balance
     if (transaction.type === 'deposit') {
+      newBalance += transaction.amount;
       await User.findByIdAndUpdate(transaction.user._id, {
         $inc: { balance: transaction.amount }
       });
     } else if (transaction.type === 'withdrawal') {
+      newBalance -= transaction.amount;
       await User.findByIdAndUpdate(transaction.user._id, {
         $inc: { balance: -transaction.amount }
       });
     }
+    
+    // Send real-time balance update via WebSocket
+    notifyBalanceUpdate(transaction.user._id, {
+      balance: newBalance,
+      transaction: {
+        type: transaction.type,
+        amount: transaction.amount,
+        status: 'completed'
+      },
+      message: `Your ${transaction.type} of $${transaction.amount} has been approved!`
+    });
     
     // Send notification
     await Notification.create({
@@ -296,21 +320,26 @@ router.post('/transactions/:id/approve', async (req, res, next) => {
     });
     
     // Send email
-    const emailTemplate = emailTemplates.transactionNotification(
-      transaction.user.name,
-      transaction.type,
-      transaction.amount,
-      'approved'
-    );
-    await sendEmail({
-      to: transaction.user.email,
-      subject: emailTemplate.subject,
-      html: emailTemplate.html
-    });
+    try {
+      const emailTemplate = emailTemplates.transactionNotification(
+        transaction.user.name,
+        transaction.type,
+        transaction.amount,
+        'approved'
+      );
+      await sendEmail({
+        to: transaction.user.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html
+      });
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+    }
     
     res.json({
       success: true,
-      message: 'Transaction approved'
+      message: 'Transaction approved',
+      data: { newBalance }
     });
   } catch (error) {
     next(error);
