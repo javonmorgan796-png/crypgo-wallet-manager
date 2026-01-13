@@ -22,7 +22,9 @@ router.get('/dashboard/stats', async (req, res, next) => {
       pendingDeposits,
       pendingWithdrawals,
       deposits,
-      withdrawals
+      withdrawals,
+      activeInvestments,
+      totalInvestmentValue
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ lastLogin: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }),
@@ -36,6 +38,11 @@ router.get('/dashboard/stats', async (req, res, next) => {
       Transaction.aggregate([
         { $match: { type: 'withdrawal', status: 'completed' } },
         { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      Investment.countDocuments({ status: 'active' }),
+      Investment.aggregate([
+        { $match: { status: 'active' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
       ])
     ]);
     
@@ -48,7 +55,147 @@ router.get('/dashboard/stats', async (req, res, next) => {
         pendingDeposits,
         pendingWithdrawals,
         totalDeposits: deposits[0]?.total || 0,
-        totalWithdrawals: withdrawals[0]?.total || 0
+        totalWithdrawals: withdrawals[0]?.total || 0,
+        activeInvestments,
+        totalInvestmentValue: totalInvestmentValue[0]?.total || 0
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Dashboard analytics (charts data)
+router.get('/dashboard/analytics', async (req, res, next) => {
+  try {
+    const { period = '30' } = req.query;
+    const days = parseInt(period);
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    
+    // Get daily deposits
+    const dailyDeposits = await Transaction.aggregate([
+      {
+        $match: {
+          type: 'deposit',
+          status: 'completed',
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    // Get daily withdrawals
+    const dailyWithdrawals = await Transaction.aggregate([
+      {
+        $match: {
+          type: 'withdrawal',
+          status: 'completed',
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    // Get daily new users
+    const dailyUsers = await User.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    // Get daily investments
+    const dailyInvestments = await Investment.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    // Get investment by plan breakdown
+    const investmentByPlan = await Investment.aggregate([
+      { $match: { status: 'active' } },
+      {
+        $group: {
+          _id: '$planName',
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { total: -1 } }
+    ]);
+    
+    // Get user growth (cumulative)
+    const userGrowth = await User.aggregate([
+      {
+        $match: { createdAt: { $gte: startDate } }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    // Calculate cumulative user count
+    let cumulativeCount = await User.countDocuments({ createdAt: { $lt: startDate } });
+    const cumulativeUserGrowth = userGrowth.map(day => {
+      cumulativeCount += day.count;
+      return { date: day._id, total: cumulativeCount, newUsers: day.count };
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        dailyDeposits,
+        dailyWithdrawals,
+        dailyUsers,
+        dailyInvestments,
+        investmentByPlan,
+        userGrowth: cumulativeUserGrowth
       }
     });
   } catch (error) {

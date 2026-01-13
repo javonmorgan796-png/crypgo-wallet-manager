@@ -15,10 +15,14 @@ const kycRoutes = require('./routes/kyc');
 const adminRoutes = require('./routes/admin');
 const notificationRoutes = require('./routes/notifications');
 const investmentRoutes = require('./routes/investments');
+const copyTradeRoutes = require('./routes/copyTrade');
 
 // Import WebSocket handlers
 const { setupWebSocket } = require('./websocket/priceUpdates');
 const { setupBalanceWebSocket } = require('./websocket/balanceUpdates');
+
+// Import cron jobs
+const { startCronJobs } = require('./cron/investmentCron');
 
 const app = express();
 const server = http.createServer(app);
@@ -78,6 +82,7 @@ app.use('/api/kyc', kycRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
+app.use('/api/copy-trade', copyTradeRoutes);
 
 // Transactions route (for user transactions)
 app.use('/api/transactions', require('./routes/wallet'));
@@ -119,6 +124,9 @@ connectDB().then(() => {
     console.log(`📡 WebSocket servers available:`);
     console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
     console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
+    
+    // Start cron jobs for investment maturity and copy trade simulation
+    startCronJobs();
   });
 });
 

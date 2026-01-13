@@ -252,6 +252,36 @@ class ApiService {
     });
   }
 
+  // Copy Trading
+  async getTraders() {
+    return this.request<any[]>('/copy-trade/traders');
+  }
+
+  async getTrader(id: string) {
+    return this.request<any>(`/copy-trade/traders/${id}`);
+  }
+
+  async startCopyTrade(traderId: string, amount: number, settings?: any) {
+    return this.request('/copy-trade/copy', {
+      method: 'POST',
+      body: JSON.stringify({ traderId, amount, settings }),
+    });
+  }
+
+  async getMyCopyTrades() {
+    return this.request<any[]>('/copy-trade/my-copies');
+  }
+
+  async stopCopyTrade(id: string) {
+    return this.request(`/copy-trade/stop/${id}`, {
+      method: 'POST',
+    });
+  }
+
+  async getCopyTradeStats() {
+    return this.request<any>('/copy-trade/stats');
+  }
+
   // Admin endpoints
   async adminGetUsers(page = 1, limit = 20) {
     return this.request<{ users: any[]; total: number }>(`/admin/users?page=${page}&limit=${limit}`);
@@ -315,7 +345,35 @@ class ApiService {
       pendingWithdrawals: number;
       totalDeposits: number;
       totalWithdrawals: number;
+      activeInvestments: number;
+      totalInvestmentValue: number;
     }>('/admin/dashboard/stats');
+  }
+
+  async adminGetDashboardAnalytics(period: string = '30') {
+    return this.request<{
+      dailyDeposits: any[];
+      dailyWithdrawals: any[];
+      dailyUsers: any[];
+      dailyInvestments: any[];
+      investmentByPlan: any[];
+      userGrowth: any[];
+    }>(`/admin/dashboard/analytics?period=${period}`);
+  }
+
+  // Admin: Trader management
+  async adminCreateTrader(data: any) {
+    return this.request('/copy-trade/admin/traders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminUpdateTrader(id: string, data: any) {
+    return this.request(`/copy-trade/admin/traders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 }
 

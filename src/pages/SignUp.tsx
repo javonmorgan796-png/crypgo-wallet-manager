@@ -47,7 +47,7 @@ export default function SignUp() {
     setIsLoading(true);
     
     try {
-      const result = await signup(name, email, password);
+      const result = await signup(name, email, password, referralCode || undefined);
       
       if (result.success) {
         setSignupComplete(true);
@@ -62,10 +62,11 @@ export default function SignUp() {
           variant: 'destructive',
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Signup error:', error);
       toast({
         title: 'Error',
-        description: 'Something went wrong. Please try again.',
+        description: error?.message || 'Network error. Please check your connection and try again.',
         variant: 'destructive',
       });
     } finally {
