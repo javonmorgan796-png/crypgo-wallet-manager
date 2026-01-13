@@ -1,11 +1,10 @@
-import { useState } from 'react';
-import { Users, TrendingUp, Target, Shield, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, TrendingUp, Target, Shield, Search, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { mockTraders, mockCopyTrades } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -16,39 +15,221 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Slider } from '@/components/ui/slider';
+import api from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { mockTraders } from '@/data/mockData';
+
+interface Trader {
+  _id: string;
+  name: string;
+  avatar: string;
+  winRate: number;
+  totalProfit: number;
+  profitPercentage: number;
+  followers: number;
+  trades: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  specialization: string;
+  monthlyReturns: number[];
+  minCopyAmount: number;
+  maxCopyAmount: number;
+}
+
+interface CopyTrade {
+  _id: string;
+  trader: Trader;
+  amount: number;
+  currentValue: number;
+  profit: number;
+  profitPercentage: number;
+  status: 'active' | 'paused' | 'stopped';
+  startDate: string;
+  settings: {
+    stopLoss: number;
+    takeProfit: number;
+    copyPercentage: number;
+  };
+}
 
 export default function CopyTrade() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTrader, setSelectedTrader] = useState<string | null>(null);
+  const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
   const [copyAmount, setCopyAmount] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [traders, setTraders] = useState<Trader[]>([]);
+  const [myCopies, setMyCopies] = useState<CopyTrade[]>([]);
+  const [isLoadingTraders, setIsLoadingTraders] = useState(true);
+  const [isLoadingCopies, setIsLoadingCopies] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stopLoss, setStopLoss] = useState([20]);
+  const [takeProfit, setTakeProfit] = useState([50]);
   const { toast } = useToast();
+  const { user, refreshUser } = useAuth();
 
-  const filteredTraders = mockTraders.filter(
+  useEffect(() => {
+    fetchTraders();
+    fetchMyCopies();
+  }, []);
+
+  const fetchTraders = async () => {
+    setIsLoadingTraders(true);
+    try {
+      const result = await api.getTraders();
+      if (result.success && result.data) {
+        setTraders(result.data);
+      } else {
+        // Fallback to mock data if no traders in DB
+        setTraders(mockTraders.map(t => ({
+          _id: t.id,
+          name: t.name,
+          avatar: t.avatar,
+          winRate: t.winRate,
+          totalProfit: t.totalProfit,
+          profitPercentage: t.profitPercentage,
+          followers: t.followers,
+          trades: t.trades,
+          riskLevel: t.riskLevel,
+          specialization: t.specialization,
+          monthlyReturns: t.monthlyReturns,
+          minCopyAmount: 100,
+          maxCopyAmount: 100000,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch traders:', error);
+      // Use mock data as fallback
+      setTraders(mockTraders.map(t => ({
+        _id: t.id,
+        name: t.name,
+        avatar: t.avatar,
+        winRate: t.winRate,
+        totalProfit: t.totalProfit,
+        profitPercentage: t.profitPercentage,
+        followers: t.followers,
+        trades: t.trades,
+        riskLevel: t.riskLevel,
+        specialization: t.specialization,
+        monthlyReturns: t.monthlyReturns,
+        minCopyAmount: 100,
+        maxCopyAmount: 100000,
+      })));
+    } finally {
+      setIsLoadingTraders(false);
+    }
+  };
+
+  const fetchMyCopies = async () => {
+    setIsLoadingCopies(true);
+    try {
+      const result = await api.getMyCopyTrades();
+      if (result.success && result.data) {
+        setMyCopies(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch copy trades:', error);
+    } finally {
+      setIsLoadingCopies(false);
+    }
+  };
+
+  const filteredTraders = traders.filter(
     (trader) =>
       trader.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trader.specialization.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCopyTrader = () => {
+  const handleCopyTrader = async () => {
     if (!selectedTrader || !copyAmount) return;
 
-    const trader = mockTraders.find((t) => t.id === selectedTrader);
-    toast({
-      title: 'Copy trade started!',
-      description: `You are now copying ${trader?.name} with $${parseFloat(copyAmount).toLocaleString()}`,
-    });
-    setDialogOpen(false);
-    setCopyAmount('');
-    setSelectedTrader(null);
+    const amount = parseFloat(copyAmount);
+    if (amount < (selectedTrader.minCopyAmount || 100)) {
+      toast({
+        title: 'Error',
+        description: `Minimum copy amount is $${selectedTrader.minCopyAmount || 100}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (user && amount > user.balance) {
+      toast({
+        title: 'Insufficient Balance',
+        description: 'You don\'t have enough balance to copy this trader.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await api.startCopyTrade(selectedTrader._id, amount, {
+        stopLoss: stopLoss[0],
+        takeProfit: takeProfit[0],
+        copyPercentage: 100,
+      });
+
+      if (result.success) {
+        toast({
+          title: 'Copy trade started!',
+          description: `You are now copying ${selectedTrader.name} with $${amount.toLocaleString()}`,
+        });
+        setDialogOpen(false);
+        setCopyAmount('');
+        setSelectedTrader(null);
+        fetchMyCopies();
+        refreshUser();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to start copy trade',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to start copy trade. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const openCopyDialog = (traderId: string) => {
-    setSelectedTrader(traderId);
+  const handleStopCopy = async (copyId: string) => {
+    try {
+      const result = await api.stopCopyTrade(copyId);
+      if (result.success) {
+        const data = result.data as { returnAmount?: number; profit?: number } | undefined;
+        toast({
+          title: 'Copy trade stopped',
+          description: data?.profit !== undefined
+            ? `Returned $${data.returnAmount?.toFixed(2)} (${data.profit >= 0 ? '+' : ''}$${data.profit?.toFixed(2)} profit)`
+            : 'Funds returned to your balance',
+        });
+        fetchMyCopies();
+        refreshUser();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'Failed to stop copy trade',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to stop copy trade',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openCopyDialog = (trader: Trader) => {
+    setSelectedTrader(trader);
     setDialogOpen(true);
   };
-
-  const selectedTraderData = mockTraders.find((t) => t.id === selectedTrader);
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -95,164 +276,176 @@ export default function CopyTrade() {
 
           {/* Professional Traders */}
           <TabsContent value="traders" className="space-y-6">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {filteredTraders.map((trader) => (
-                <Card
-                  key={trader.id}
-                  className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover-lift"
-                >
-                  <CardContent className="p-6">
-                    {/* Trader Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={trader.avatar}
-                          alt={trader.name}
-                          className="h-14 w-14 rounded-full border-2 border-primary"
-                        />
-                        <div>
-                          <h3 className="font-semibold text-foreground">{trader.name}</h3>
-                          <p className="text-sm text-muted-foreground">{trader.specialization}</p>
-                        </div>
-                      </div>
-                      <Badge variant="outline" className={getRiskColor(trader.riskLevel)}>
-                        {trader.riskLevel} risk
-                      </Badge>
-                    </div>
-
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="p-3 rounded-lg bg-secondary/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Target className="h-4 w-4 text-primary" />
-                          <span className="text-xs text-muted-foreground">Win Rate</span>
-                        </div>
-                        <p className="font-bold text-foreground">{trader.winRate}%</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-secondary/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <TrendingUp className="h-4 w-4 text-primary" />
-                          <span className="text-xs text-muted-foreground">Total Return</span>
-                        </div>
-                        <p className="font-bold text-primary">+{trader.profitPercentage}%</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-secondary/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Users className="h-4 w-4 text-primary" />
-                          <span className="text-xs text-muted-foreground">Followers</span>
-                        </div>
-                        <p className="font-bold text-foreground">{trader.followers.toLocaleString()}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-secondary/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Shield className="h-4 w-4 text-primary" />
-                          <span className="text-xs text-muted-foreground">Trades</span>
-                        </div>
-                        <p className="font-bold text-foreground">{trader.trades.toLocaleString()}</p>
-                      </div>
-                    </div>
-
-                    {/* Monthly Performance */}
-                    <div className="mb-4">
-                      <p className="text-xs text-muted-foreground mb-2">Last 6 months performance</p>
-                      <div className="flex items-end gap-1 h-12">
-                        {trader.monthlyReturns.map((value, index) => (
-                          <div
-                            key={index}
-                            className={`flex-1 rounded-t ${value >= 0 ? 'bg-primary' : 'bg-destructive'}`}
-                            style={{
-                              height: `${Math.min(Math.abs(value) * 2, 100)}%`,
-                              minHeight: '4px',
-                            }}
+            {isLoadingTraders ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {filteredTraders.map((trader) => (
+                  <Card
+                    key={trader._id}
+                    className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover-lift"
+                  >
+                    <CardContent className="p-6">
+                      {/* Trader Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={trader.avatar}
+                            alt={trader.name}
+                            className="h-14 w-14 rounded-full border-2 border-primary"
                           />
-                        ))}
+                          <div>
+                            <h3 className="font-semibold text-foreground">{trader.name}</h3>
+                            <p className="text-sm text-muted-foreground">{trader.specialization}</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className={getRiskColor(trader.riskLevel)}>
+                          {trader.riskLevel} risk
+                        </Badge>
                       </div>
-                    </div>
 
-                    {/* Total Profit */}
-                    <div className="flex items-center justify-between mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                      <span className="text-sm text-muted-foreground">Total Profit Generated</span>
-                      <span className="font-bold text-primary">
-                        ${(trader.totalProfit / 1000000).toFixed(2)}M
-                      </span>
-                    </div>
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="p-3 rounded-lg bg-secondary/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Target className="h-4 w-4 text-primary" />
+                            <span className="text-xs text-muted-foreground">Win Rate</span>
+                          </div>
+                          <p className="font-bold text-foreground">{trader.winRate}%</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-secondary/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <TrendingUp className="h-4 w-4 text-primary" />
+                            <span className="text-xs text-muted-foreground">Total Return</span>
+                          </div>
+                          <p className="font-bold text-primary">+{trader.profitPercentage}%</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-secondary/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Users className="h-4 w-4 text-primary" />
+                            <span className="text-xs text-muted-foreground">Followers</span>
+                          </div>
+                          <p className="font-bold text-foreground">{trader.followers.toLocaleString()}</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-secondary/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Shield className="h-4 w-4 text-primary" />
+                            <span className="text-xs text-muted-foreground">Trades</span>
+                          </div>
+                          <p className="font-bold text-foreground">{trader.trades.toLocaleString()}</p>
+                        </div>
+                      </div>
 
-                    <Button
-                      onClick={() => openCopyDialog(trader.id)}
-                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      Copy Trader
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      {/* Monthly Performance */}
+                      <div className="mb-4">
+                        <p className="text-xs text-muted-foreground mb-2">Last 6 months performance</p>
+                        <div className="flex items-end gap-1 h-12">
+                          {trader.monthlyReturns.map((value, index) => (
+                            <div
+                              key={index}
+                              className={`flex-1 rounded-t ${value >= 0 ? 'bg-primary' : 'bg-destructive'}`}
+                              style={{
+                                height: `${Math.min(Math.abs(value) * 2, 100)}%`,
+                                minHeight: '4px',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Total Profit */}
+                      <div className="flex items-center justify-between mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <span className="text-sm text-muted-foreground">Total Profit Generated</span>
+                        <span className="font-bold text-primary">
+                          ${(trader.totalProfit / 1000000).toFixed(2)}M
+                        </span>
+                      </div>
+
+                      <Button
+                        onClick={() => openCopyDialog(trader)}
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        Copy Trader
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* My Copy Trades */}
           <TabsContent value="my-copies" className="space-y-4">
-            {mockCopyTrades.length > 0 ? (
-              mockCopyTrades.map((trade) => {
-                const trader = mockTraders.find((t) => t.id === trade.traderId);
-                return (
-                  <Card key={trade.id} className="bg-card border-border">
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={trader?.avatar}
-                            alt={trade.traderName}
-                            className="h-14 w-14 rounded-full border-2 border-primary"
-                          />
-                          <div>
-                            <h3 className="font-semibold text-foreground">{trade.traderName}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Started: {new Date(trade.startDate).toLocaleDateString()}
-                            </p>
-                          </div>
+            {isLoadingCopies ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : myCopies.length > 0 ? (
+              myCopies.map((copy) => (
+                <Card key={copy._id} className="bg-card border-border">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <img
+                          src={copy.trader?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${copy.trader?.name}`}
+                          alt={copy.trader?.name}
+                          className="h-14 w-14 rounded-full border-2 border-primary"
+                        />
+                        <div>
+                          <h3 className="font-semibold text-foreground">{copy.trader?.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Started: {new Date(copy.startDate).toLocaleDateString()}
+                          </p>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Invested</p>
-                            <p className="font-semibold text-foreground">
-                              ${trade.amount.toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-muted-foreground">Profit</p>
-                            <p className="font-semibold text-primary">
-                              +${trade.profit.toLocaleString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-muted-foreground">Return</p>
-                            <p className="font-semibold text-primary">+{trade.profitPercentage}%</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-muted-foreground">Status</p>
-                            <Badge
-                              variant="outline"
-                              className={
-                                trade.status === 'active'
-                                  ? 'bg-primary/10 text-primary border-primary/30'
-                                  : 'bg-muted text-muted-foreground'
-                              }
-                            >
-                              {trade.status}
-                            </Badge>
-                          </div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Invested</p>
+                          <p className="font-semibold text-foreground">
+                            ${copy.amount.toLocaleString()}
+                          </p>
                         </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Current Value</p>
+                          <p className="font-semibold text-foreground">
+                            ${copy.currentValue?.toFixed(2) || copy.amount.toFixed(2)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Profit</p>
+                          <p className={`font-semibold ${copy.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                            {copy.profit >= 0 ? '+' : ''}${copy.profit?.toFixed(2) || '0.00'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Status</p>
+                          <Badge
+                            variant="outline"
+                            className={
+                              copy.status === 'active'
+                                ? 'bg-primary/10 text-primary border-primary/30'
+                                : 'bg-muted text-muted-foreground'
+                            }
+                          >
+                            {copy.status}
+                          </Badge>
+                        </div>
+                      </div>
+                      {copy.status === 'active' && (
                         <Button
                           variant="outline"
                           className="border-destructive text-destructive hover:bg-destructive/10"
+                          onClick={() => handleStopCopy(copy._id)}
                         >
                           Stop Copy
                         </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
             ) : (
               <Card className="bg-card border-border">
                 <CardContent className="p-12 text-center">
@@ -272,44 +465,78 @@ export default function CopyTrade() {
           <DialogContent className="bg-card border-border">
             <DialogHeader>
               <DialogTitle className="font-display text-2xl">
-                Copy {selectedTraderData?.name}
+                Copy {selectedTrader?.name}
               </DialogTitle>
               <DialogDescription>
                 Enter the amount you want to allocate for copying this trader's strategies.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6 pt-4">
-              {selectedTraderData && (
+              {selectedTrader && (
                 <div className="flex items-center gap-4 p-4 rounded-lg bg-secondary/50">
                   <img
-                    src={selectedTraderData.avatar}
-                    alt={selectedTraderData.name}
+                    src={selectedTrader.avatar}
+                    alt={selectedTrader.name}
                     className="h-12 w-12 rounded-full border-2 border-primary"
                   />
                   <div className="flex-1">
-                    <p className="font-medium text-foreground">{selectedTraderData.name}</p>
-                    <p className="text-sm text-muted-foreground">{selectedTraderData.specialization}</p>
+                    <p className="font-medium text-foreground">{selectedTrader.name}</p>
+                    <p className="text-sm text-muted-foreground">{selectedTrader.specialization}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-primary">+{selectedTraderData.profitPercentage}%</p>
+                    <p className="font-bold text-primary">+{selectedTrader.profitPercentage}%</p>
                     <p className="text-xs text-muted-foreground">Total Return</p>
                   </div>
                 </div>
               )}
+              
               <div className="space-y-2">
                 <Label htmlFor="copy-amount">Copy Amount (USD)</Label>
                 <Input
                   id="copy-amount"
                   type="number"
-                  placeholder="Minimum: $100"
+                  placeholder={`Minimum: $${selectedTrader?.minCopyAmount || 100}`}
                   value={copyAmount}
                   onChange={(e) => setCopyAmount(e.target.value)}
                   className="bg-secondary border-border"
                 />
                 <p className="text-sm text-muted-foreground">
-                  This amount will be used to automatically copy the trader's positions.
+                  Available balance: ${user?.balance?.toFixed(2) || '0.00'}
                 </p>
               </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Stop Loss: {stopLoss[0]}%</Label>
+                  <Slider
+                    value={stopLoss}
+                    onValueChange={setStopLoss}
+                    min={5}
+                    max={50}
+                    step={5}
+                    className="py-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Automatically stop if loss exceeds this percentage
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Take Profit: {takeProfit[0]}%</Label>
+                  <Slider
+                    value={takeProfit}
+                    onValueChange={setTakeProfit}
+                    min={10}
+                    max={200}
+                    step={10}
+                    className="py-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Automatically close when profit reaches this percentage
+                  </p>
+                </div>
+              </div>
+
               <div className="flex gap-3">
                 <Button
                   variant="outline"
@@ -321,9 +548,16 @@ export default function CopyTrade() {
                 <Button
                   onClick={handleCopyTrader}
                   className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={!copyAmount || parseFloat(copyAmount) < 100}
+                  disabled={!copyAmount || parseFloat(copyAmount) < (selectedTrader?.minCopyAmount || 100) || isSubmitting}
                 >
-                  Start Copying
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    'Start Copying'
+                  )}
                 </Button>
               </div>
             </div>
