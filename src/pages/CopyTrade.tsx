@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockTraders } from '@/data/mockData';
 
 interface Trader {
   _id: string;
@@ -79,41 +78,11 @@ export default function CopyTrade() {
       if (result.success && result.data) {
         setTraders(result.data);
       } else {
-        // Fallback to mock data if no traders in DB
-        setTraders(mockTraders.map(t => ({
-          _id: t.id,
-          name: t.name,
-          avatar: t.avatar,
-          winRate: t.winRate,
-          totalProfit: t.totalProfit,
-          profitPercentage: t.profitPercentage,
-          followers: t.followers,
-          trades: t.trades,
-          riskLevel: t.riskLevel,
-          specialization: t.specialization,
-          monthlyReturns: t.monthlyReturns,
-          minCopyAmount: 100,
-          maxCopyAmount: 100000,
-        })));
+        setTraders([]);
       }
     } catch (error) {
       console.error('Failed to fetch traders:', error);
-      // Use mock data as fallback
-      setTraders(mockTraders.map(t => ({
-        _id: t.id,
-        name: t.name,
-        avatar: t.avatar,
-        winRate: t.winRate,
-        totalProfit: t.totalProfit,
-        profitPercentage: t.profitPercentage,
-        followers: t.followers,
-        trades: t.trades,
-        riskLevel: t.riskLevel,
-        specialization: t.specialization,
-        monthlyReturns: t.monthlyReturns,
-        minCopyAmount: 100,
-        maxCopyAmount: 100000,
-      })));
+      setTraders([]);
     } finally {
       setIsLoadingTraders(false);
     }

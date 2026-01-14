@@ -1,6 +1,5 @@
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { mockUser } from '@/data/mockData';
 import { NotificationsDropdown } from '@/components/notifications/NotificationsDropdown';
 import { LiveCryptoPrices } from '@/components/LiveCryptoPrices';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,7 +33,7 @@ export function Header() {
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Balance</p>
             <p className="font-semibold text-foreground">
-              ${mockUser.balance.toLocaleString()}
+              ${(user?.balance || 0).toLocaleString()}
             </p>
           </div>
         </div>
@@ -42,13 +41,13 @@ export function Header() {
         {/* User Avatar */}
         <div className="flex items-center gap-3">
           <img
-            src={mockUser.avatar}
-            alt={user?.name || mockUser.name}
+            src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name || 'User'}`}
+            alt={user?.name || 'User'}
             className="h-10 w-10 rounded-full border-2 border-primary"
           />
           <div className="hidden md:block">
-            <p className="text-sm font-medium text-foreground">{user?.name || mockUser.name}</p>
-            <p className="text-xs text-muted-foreground">{user?.email || mockUser.email}</p>
+            <p className="text-sm font-medium text-foreground">{user?.name || 'User'}</p>
+            <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
           </div>
         </div>
       </div>

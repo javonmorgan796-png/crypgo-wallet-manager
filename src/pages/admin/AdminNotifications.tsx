@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -14,14 +13,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import { 
   Send,
   Bell,
   Mail,
@@ -29,23 +20,27 @@ import {
   Users,
   User,
   Clock,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
 
-// Mock data
-const mockNotificationHistory = [
-  { id: '1', type: 'broadcast', title: 'Platform Maintenance', message: 'Scheduled maintenance on Dec 10th', recipients: 'all', sentAt: '2024-12-05T10:00:00', status: 'sent' },
-  { id: '2', type: 'individual', title: 'KYC Approved', message: 'Your identity verification has been approved', recipients: 'john@example.com', sentAt: '2024-12-04T15:30:00', status: 'sent' },
-  { id: '3', type: 'broadcast', title: 'New Investment Plans', message: 'Check out our new high-yield plans', recipients: 'all', sentAt: '2024-12-03T09:00:00', status: 'sent' },
-];
+interface UserOption {
+  id: string;
+  name: string;
+  email: string;
+}
 
-const mockUsers = [
-  { id: '1', name: 'John Doe', email: 'john@example.com' },
-  { id: '2', name: 'Jane Smith', email: 'jane@example.com' },
-  { id: '3', name: 'Bob Wilson', email: 'bob@example.com' },
-  { id: '4', name: 'Alice Brown', email: 'alice@example.com' },
-];
+interface NotificationHistory {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  recipients: string;
+  sentAt: string;
+  status: string;
+}
 
 export function AdminNotifications() {
   const { toast } = useToast();
@@ -56,7 +51,31 @@ export function AdminNotifications() {
   const [sendEmail, setSendEmail] = useState(true);
   const [sendPush, setSendPush] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [history, setHistory] = useState(mockNotificationHistory);
+  const [history, setHistory] = useState<NotificationHistory[]>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const result = await api.adminGetUsers(1, 100);
+      if (result.success && result.data?.users) {
+        setUsers(result.data.users.map((u: any) => ({
+          id: u._id || u.id,
+          name: u.name,
+          email: u.email,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!title.trim() || !message.trim()) {
@@ -79,33 +98,50 @@ export function AdminNotifications() {
 
     setIsSending(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      const result = await api.adminSendNotification({
+        userId: notificationType === 'individual' ? selectedUser : undefined,
+        title,
+        message,
+        type: notificationType === 'broadcast' ? 'admin' : 'system',
+      });
 
-    const newNotification = {
-      id: Date.now().toString(),
-      type: notificationType,
-      title,
-      message,
-      recipients: notificationType === 'broadcast' ? 'all' : selectedUser,
-      sentAt: new Date().toISOString(),
-      status: 'sent',
-    };
+      if (result.success) {
+        const newNotification: NotificationHistory = {
+          id: Date.now().toString(),
+          type: notificationType,
+          title,
+          message,
+          recipients: notificationType === 'broadcast' ? 'all' : selectedUser,
+          sentAt: new Date().toISOString(),
+          status: 'sent',
+        };
 
-    setHistory([newNotification, ...history]);
-    
-    toast({
-      title: "Notification Sent",
-      description: notificationType === 'broadcast' 
-        ? "Notification sent to all users" 
-        : `Notification sent to ${selectedUser}`,
-    });
+        setHistory([newNotification, ...history]);
+        
+        toast({
+          title: "Notification Sent",
+          description: notificationType === 'broadcast' 
+            ? "Notification sent to all users" 
+            : `Notification sent to ${selectedUser}`,
+        });
 
-    // Reset form
-    setTitle('');
-    setMessage('');
-    setSelectedUser('');
-    setIsSending(false);
+        // Reset form
+        setTitle('');
+        setMessage('');
+        setSelectedUser('');
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send notification",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -157,11 +193,11 @@ export function AdminNotifications() {
                 <Label>Select User</Label>
                 <Select value={selectedUser} onValueChange={setSelectedUser}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a user..." />
+                    <SelectValue placeholder={isLoadingUsers ? "Loading users..." : "Select a user..."} />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockUsers.map(user => (
-                      <SelectItem key={user.id} value={user.email}>
+                    {users.map(user => (
+                      <SelectItem key={user.id} value={user.id}>
                         {user.name} ({user.email})
                       </SelectItem>
                     ))}
@@ -205,7 +241,7 @@ export function AdminNotifications() {
                     className="rounded border-gray-300"
                   />
                   <Mail className="h-4 w-4" />
-                  Email (Nodemailer)
+                  Email
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -227,7 +263,7 @@ export function AdminNotifications() {
             >
               {isSending ? (
                 <>
-                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Sending...
                 </>
               ) : (
@@ -252,48 +288,55 @@ export function AdminNotifications() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {history.map((notification) => (
-                <div 
-                  key={notification.id}
-                  className="p-4 border rounded-lg space-y-2"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium">{notification.title}</h4>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {notification.message}
-                      </p>
+            {history.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Bell className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No notifications sent yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {history.map((notification) => (
+                  <div 
+                    key={notification.id}
+                    className="p-4 border rounded-lg space-y-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-medium">{notification.title}</h4>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {notification.message}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant="outline"
+                        className={notification.type === 'broadcast' 
+                          ? 'bg-blue-500/10 text-blue-500' 
+                          : 'bg-purple-500/10 text-purple-500'
+                        }
+                      >
+                        {notification.type === 'broadcast' ? (
+                          <><Users className="h-3 w-3 mr-1" />All</>
+                        ) : (
+                          <><User className="h-3 w-3 mr-1" />Individual</>
+                        )}
+                      </Badge>
                     </div>
-                    <Badge 
-                      variant="outline"
-                      className={notification.type === 'broadcast' 
-                        ? 'bg-blue-500/10 text-blue-500' 
-                        : 'bg-purple-500/10 text-purple-500'
-                      }
-                    >
-                      {notification.type === 'broadcast' ? (
-                        <><Users className="h-3 w-3 mr-1" />All</>
-                      ) : (
-                        <><User className="h-3 w-3 mr-1" />Individual</>
-                      )}
-                    </Badge>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        {notification.type === 'broadcast' 
+                          ? 'All users' 
+                          : notification.recipients
+                        }
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3 text-green-500" />
+                        {new Date(notification.sentAt).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      {notification.type === 'broadcast' 
-                        ? 'All users' 
-                        : notification.recipients
-                      }
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3 text-green-500" />
-                      {new Date(notification.sentAt).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

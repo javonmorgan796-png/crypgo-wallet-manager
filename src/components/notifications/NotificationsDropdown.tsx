@@ -1,102 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Bell, MessageSquare, ArrowDownCircle, ArrowUpCircle, Shield, Gift, Info } from 'lucide-react';
+import { Bell, MessageSquare, ArrowDownCircle, ArrowUpCircle, Shield, Gift, Info, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import api from '@/services/api';
 
 export interface Notification {
   id: string;
+  _id?: string;
   type: 'admin' | 'deposit' | 'withdrawal' | 'system' | 'promotion';
   title: string;
   message: string;
-  time: string;
+  time?: string;
   read: boolean;
-  createdAt: Date;
+  createdAt: Date | string;
 }
-
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'admin',
-    title: 'Important System Update',
-    message: 'We have upgraded our security protocols. Please update your password for enhanced protection.',
-    time: '5 min ago',
-    read: false,
-    createdAt: new Date(Date.now() - 5 * 60 * 1000),
-  },
-  {
-    id: '2',
-    type: 'deposit',
-    title: 'Deposit Confirmed',
-    message: 'Your deposit of $5,000 USDT TRC-20 has been confirmed and credited to your account.',
-    time: '15 min ago',
-    read: false,
-    createdAt: new Date(Date.now() - 15 * 60 * 1000),
-  },
-  {
-    id: '3',
-    type: 'withdrawal',
-    title: 'Withdrawal Processing',
-    message: 'Your withdrawal request of $2,500 BTC is being processed. Expected completion in 24 hours.',
-    time: '1 hour ago',
-    read: false,
-    createdAt: new Date(Date.now() - 60 * 60 * 1000),
-  },
-  {
-    id: '4',
-    type: 'admin',
-    title: 'Welcome to Green Bull!',
-    message: 'Thank you for joining Green Bull. Complete your KYC verification to unlock all features.',
-    time: '2 hours ago',
-    read: true,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-  },
-  {
-    id: '5',
-    type: 'promotion',
-    title: 'Limited Time Offer',
-    message: 'Get 5% bonus on your next deposit! Offer valid until end of month.',
-    time: '1 day ago',
-    read: true,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-  },
-  {
-    id: '6',
-    type: 'deposit',
-    title: 'Deposit Pending',
-    message: 'Your deposit of $10,000 ETH is awaiting confirmation. Please wait for blockchain verification.',
-    time: '3 hours ago',
-    read: true,
-    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-  },
-  {
-    id: '7',
-    type: 'withdrawal',
-    title: 'Withdrawal Completed',
-    message: 'Your withdrawal of $1,000 has been successfully sent to your wallet.',
-    time: '2 days ago',
-    read: true,
-    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
-  },
-  {
-    id: '8',
-    type: 'system',
-    title: 'Investment Matured',
-    message: 'Your Gold Plan investment has matured with 30% ROI. Funds have been credited to your balance.',
-    time: '3 days ago',
-    read: true,
-    createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000),
-  },
-];
 
 const getNotificationIcon = (type: Notification['type']) => {
   switch (type) {
@@ -115,9 +39,49 @@ const getNotificationIcon = (type: Notification['type']) => {
   }
 };
 
+const formatTimeAgo = (date: Date | string) => {
+  const now = new Date();
+  const then = new Date(date);
+  const diffMs = now.getTime() - then.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+};
+
 export function NotificationsDropdown() {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getNotifications();
+      if (result.success && result.data) {
+        setNotifications(result.data.map((n: any) => ({
+          id: n._id || n.id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          read: n.read,
+          createdAt: n.createdAt,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -128,14 +92,23 @@ export function NotificationsDropdown() {
     return true;
   });
 
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     );
+    try {
+      await api.markNotificationRead(id);
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
   };
 
   const markAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    // Mark all as read on server
+    notifications.filter(n => !n.read).forEach(n => {
+      api.markNotificationRead(n.id).catch(console.error);
+    });
   };
 
   return (
@@ -184,7 +157,11 @@ export function NotificationsDropdown() {
           
           <TabsContent value={activeTab} className="mt-0">
             <ScrollArea className="h-80">
-              {filteredNotifications.length === 0 ? (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredNotifications.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground text-sm">
                   No notifications
                 </div>
@@ -213,7 +190,7 @@ export function NotificationsDropdown() {
                             {notification.message}
                           </p>
                           <span className="text-xs text-muted-foreground mt-2 block">
-                            {notification.time}
+                            {formatTimeAgo(notification.createdAt)}
                           </span>
                         </div>
                       </div>

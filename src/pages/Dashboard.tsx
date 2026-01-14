@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { PortfolioChart } from '@/components/charts/PortfolioChart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserData } from '@/hooks/useUserData';
-import { investmentPlans, mockTraders } from '@/data/mockData';
 
 export default function Dashboard() {
   const { user } = useAuth();
