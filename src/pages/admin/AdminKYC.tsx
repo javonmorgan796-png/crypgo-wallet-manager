@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,77 +25,117 @@ import {
   XCircle, 
   FileText,
   Download,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
 
-// Mock data
-const mockKYCRequests = [
-  { 
-    id: '1', 
-    userId: 'u1',
-    userName: 'Jane Smith', 
-    email: 'jane@example.com',
-    documentType: 'passport',
-    frontImage: '/placeholder.svg',
-    backImage: '/placeholder.svg',
-    selfie: '/placeholder.svg',
-    submittedAt: '2024-12-01',
-    status: 'pending'
-  },
-  { 
-    id: '2', 
-    userId: 'u2',
-    userName: 'Charlie Davis', 
-    email: 'charlie@example.com',
-    documentType: 'drivers_license',
-    frontImage: '/placeholder.svg',
-    backImage: '/placeholder.svg',
-    selfie: '/placeholder.svg',
-    submittedAt: '2024-12-02',
-    status: 'pending'
-  },
-  { 
-    id: '3', 
-    userId: 'u3',
-    userName: 'Mike Johnson', 
-    email: 'mike@example.com',
-    documentType: 'national_id',
-    frontImage: '/placeholder.svg',
-    backImage: '/placeholder.svg',
-    selfie: '/placeholder.svg',
-    submittedAt: '2024-11-28',
-    status: 'pending'
-  },
-];
+interface KYCRequest {
+  id: string;
+  _id?: string;
+  userId: string;
+  userName: string;
+  email: string;
+  documentType: string;
+  frontImage: string;
+  backImage: string;
+  selfie: string;
+  submittedAt: string;
+  status: string;
+}
 
 export function AdminKYC() {
   const { toast } = useToast();
-  const [requests, setRequests] = useState(mockKYCRequests);
-  const [selectedRequest, setSelectedRequest] = useState<typeof mockKYCRequests[0] | null>(null);
+  const [requests, setRequests] = useState<KYCRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<KYCRequest | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [viewingDocuments, setViewingDocuments] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleApprove = (id: string) => {
-    setRequests(requests.filter(r => r.id !== id));
-    toast({
-      title: "KYC Approved",
-      description: "User has been notified of their verification approval",
-    });
+  useEffect(() => {
+    fetchKYCRequests();
+  }, []);
+
+  const fetchKYCRequests = async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.adminGetKYCRequests('pending');
+      if (result.success && result.data) {
+        setRequests(result.data.map((r: any) => ({
+          id: r._id || r.id,
+          userId: r.userId,
+          userName: r.userName || r.user?.name || 'Unknown',
+          email: r.email || r.user?.email || '',
+          documentType: r.documentType,
+          frontImage: r.frontImage,
+          backImage: r.backImage,
+          selfie: r.selfie,
+          submittedAt: r.submittedAt || r.createdAt,
+          status: r.status,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch KYC requests:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleReject = () => {
+  const handleApprove = async (id: string) => {
+    setIsProcessing(true);
+    try {
+      const request = requests.find(r => r.id === id);
+      const result = await api.adminApproveKYC(request?.userId || id);
+      if (result.success) {
+        setRequests(requests.filter(r => r.id !== id));
+        toast({
+          title: "KYC Approved",
+          description: "User has been notified of their verification approval",
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve KYC",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReject = async () => {
     if (!selectedRequest) return;
     
-    setRequests(requests.filter(r => r.id !== selectedRequest.id));
-    toast({
-      title: "KYC Rejected",
-      description: "User has been notified with the rejection reason",
-    });
-    setShowRejectDialog(false);
-    setRejectReason('');
-    setSelectedRequest(null);
+    setIsProcessing(true);
+    try {
+      const result = await api.adminRejectKYC(selectedRequest.userId || selectedRequest.id, rejectReason);
+      if (result.success) {
+        setRequests(requests.filter(r => r.id !== selectedRequest.id));
+        toast({
+          title: "KYC Rejected",
+          description: "User has been notified with the rejection reason",
+        });
+        setShowRejectDialog(false);
+        setRejectReason('');
+        setSelectedRequest(null);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject KYC",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const getDocumentTypeName = (type: string) => {
@@ -106,6 +146,14 @@ export function AdminKYC() {
       default: return type;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -178,6 +226,7 @@ export function AdminKYC() {
                           size="sm"
                           className="bg-green-500 hover:bg-green-600"
                           onClick={() => handleApprove(request.id)}
+                          disabled={isProcessing}
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Approve
@@ -189,6 +238,7 @@ export function AdminKYC() {
                             setSelectedRequest(request);
                             setShowRejectDialog(true);
                           }}
+                          disabled={isProcessing}
                         >
                           <XCircle className="h-4 w-4 mr-1" />
                           Reject
@@ -218,7 +268,7 @@ export function AdminKYC() {
               <p className="text-sm font-medium">Document Front</p>
               <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
                 <img 
-                  src={selectedRequest?.frontImage} 
+                  src={selectedRequest?.frontImage || '/placeholder.svg'} 
                   alt="Document Front"
                   className="w-full h-full object-cover"
                 />
@@ -233,7 +283,7 @@ export function AdminKYC() {
               <p className="text-sm font-medium">Document Back</p>
               <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
                 <img 
-                  src={selectedRequest?.backImage} 
+                  src={selectedRequest?.backImage || '/placeholder.svg'} 
                   alt="Document Back"
                   className="w-full h-full object-cover"
                 />
@@ -248,7 +298,7 @@ export function AdminKYC() {
               <p className="text-sm font-medium">Selfie with Document</p>
               <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
                 <img 
-                  src={selectedRequest?.selfie} 
+                  src={selectedRequest?.selfie || '/placeholder.svg'} 
                   alt="Selfie"
                   className="w-full h-full object-cover"
                 />
@@ -270,6 +320,7 @@ export function AdminKYC() {
                 handleApprove(selectedRequest!.id);
                 setViewingDocuments(false);
               }}
+              disabled={isProcessing}
             >
               <CheckCircle className="h-4 w-4 mr-1" />
               Approve
@@ -280,6 +331,7 @@ export function AdminKYC() {
                 setViewingDocuments(false);
                 setShowRejectDialog(true);
               }}
+              disabled={isProcessing}
             >
               <XCircle className="h-4 w-4 mr-1" />
               Reject
@@ -315,8 +367,9 @@ export function AdminKYC() {
             <Button 
               variant="destructive"
               onClick={handleReject}
-              disabled={!rejectReason.trim()}
+              disabled={!rejectReason.trim() || isProcessing}
             >
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Reject Request
             </Button>
           </DialogFooter>

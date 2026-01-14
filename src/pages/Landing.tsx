@@ -10,8 +10,17 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cryptoPrices } from '@/data/mockData';
 import logo from '@/assets/logo.png';
+
+// Live crypto prices for the ticker
+const cryptoPrices = [
+  { symbol: 'BTC', name: 'Bitcoin', price: 43250.80, change24h: 2.34, icon: '₿' },
+  { symbol: 'ETH', name: 'Ethereum', price: 2280.45, change24h: 1.87, icon: 'Ξ' },
+  { symbol: 'BNB', name: 'BNB', price: 312.20, change24h: -0.54, icon: '⬡' },
+  { symbol: 'SOL', name: 'Solana', price: 98.75, change24h: 5.21, icon: '◎' },
+  { symbol: 'XRP', name: 'Ripple', price: 0.62, change24h: -1.23, icon: '✕' },
+  { symbol: 'ADA', name: 'Cardano', price: 0.58, change24h: 3.45, icon: '₳' },
+];
 
 export default function Landing() {
   return (

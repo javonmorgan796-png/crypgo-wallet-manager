@@ -1,23 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Check, Gift, Users, DollarSign, Share2 } from 'lucide-react';
+import { Copy, Check, Gift, Users, DollarSign, Share2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { mockUser } from '@/data/mockData';
+import { useAuth } from '@/contexts/AuthContext';
+import api from '@/services/api';
 
-const mockReferrals = [
-  { id: '1', name: 'John S.', email: 'j***@email.com', joinedAt: '2024-12-01', earned: 50, status: 'active' },
-  { id: '2', name: 'Sarah M.', email: 's***@email.com', joinedAt: '2024-11-28', earned: 75, status: 'active' },
-  { id: '3', name: 'Mike K.', email: 'm***@email.com', joinedAt: '2024-11-15', earned: 100, status: 'active' },
-];
+interface ReferralData {
+  code: string;
+  referrals: Array<{
+    id: string;
+    name: string;
+    email: string;
+    joinedAt: string;
+    earned: number;
+    status: string;
+  }>;
+  earnings: number;
+}
 
 export default function Referral() {
   const [copied, setCopied] = useState(false);
-  const referralCode = `GREENBULL-${mockUser.id.toUpperCase()}2024`;
-  const referralLink = `https://greenbull.io/signup?ref=${referralCode}`;
+  const [isLoading, setIsLoading] = useState(true);
+  const [referralData, setReferralData] = useState<ReferralData | null>(null);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchReferralInfo();
+  }, []);
+
+  const fetchReferralInfo = async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.getReferralInfo();
+      if (result.success && result.data) {
+        setReferralData(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch referral info:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const referralCode = referralData?.code || `GREENBULL-${user?.id?.slice(0, 8).toUpperCase() || 'USER'}`;
+  const referralLink = `https://greenb.lovable.app/signup?ref=${referralCode}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -26,8 +56,18 @@ export default function Referral() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const totalEarned = mockReferrals.reduce((sum, ref) => sum + ref.earned, 0);
-  const totalReferrals = mockReferrals.length;
+  const totalEarned = referralData?.earnings || 0;
+  const totalReferrals = referralData?.referrals?.length || 0;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -167,9 +207,9 @@ export default function Referral() {
             <CardTitle>Your Referrals</CardTitle>
           </CardHeader>
           <CardContent>
-            {mockReferrals.length > 0 ? (
+            {referralData?.referrals && referralData.referrals.length > 0 ? (
               <div className="space-y-3">
-                {mockReferrals.map((referral) => (
+                {referralData.referrals.map((referral) => (
                   <div
                     key={referral.id}
                     className="flex items-center justify-between py-4 px-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
