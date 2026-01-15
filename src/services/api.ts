@@ -375,6 +375,12 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  async adminDeleteTrader(id: string) {
+    return this.request(`/copy-trade/admin/traders/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiService();

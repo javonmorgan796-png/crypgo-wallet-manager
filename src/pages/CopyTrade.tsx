@@ -246,10 +246,46 @@ export default function CopyTrade() {
           {/* Professional Traders */}
           <TabsContent value="traders" className="space-y-6">
             {isLoadingTraders ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <Card key={i} className="bg-card border-border">
+                    <CardContent className="p-6">
+                      {/* Header Skeleton */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-14 w-14 rounded-full bg-muted animate-pulse" />
+                          <div>
+                            <div className="h-5 w-32 bg-muted animate-pulse rounded mb-1" />
+                            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                          </div>
+                        </div>
+                        <div className="h-6 w-20 bg-muted animate-pulse rounded-full" />
+                      </div>
+                      {/* Stats Skeleton */}
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        {[1, 2, 3, 4].map((j) => (
+                          <div key={j} className="p-3 rounded-lg bg-secondary/50">
+                            <div className="h-4 w-16 bg-muted animate-pulse rounded mb-1" />
+                            <div className="h-5 w-12 bg-muted animate-pulse rounded" />
+                          </div>
+                        ))}
+                      </div>
+                      {/* Performance Skeleton */}
+                      <div className="mb-4">
+                        <div className="h-4 w-40 bg-muted animate-pulse rounded mb-2" />
+                        <div className="flex items-end gap-1 h-12">
+                          {[1, 2, 3, 4, 5, 6].map((j) => (
+                            <div key={j} className="flex-1 bg-muted animate-pulse rounded-t" style={{ height: `${30 + Math.random() * 40}%` }} />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="h-12 w-full bg-muted animate-pulse rounded-lg mb-4" />
+                      <div className="h-10 w-full bg-muted animate-pulse rounded" />
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            ) : (
+            ) : filteredTraders.length > 0 ? (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {filteredTraders.map((trader) => (
                   <Card
@@ -342,6 +378,16 @@ export default function CopyTrade() {
                   </Card>
                 ))}
               </div>
+            ) : (
+              <Card className="bg-card border-border">
+                <CardContent className="p-12 text-center">
+                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-semibold text-foreground mb-2">No professional traders available</h3>
+                  <p className="text-muted-foreground">
+                    Professional traders will appear here once they are added by the admin
+                  </p>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
