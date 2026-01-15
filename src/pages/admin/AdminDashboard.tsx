@@ -33,6 +33,7 @@ import { AdminKYC } from './AdminKYC';
 import { AdminTransactions } from './AdminTransactions';
 import { AdminNotifications } from './AdminNotifications';
 import { AdminSettings } from './AdminSettings';
+import { AdminTraders } from './AdminTraders';
 
 const CHART_COLORS = ['hsl(142, 76%, 36%)', 'hsl(200, 70%, 50%)', 'hsl(45, 90%, 50%)', 'hsl(280, 60%, 50%)', 'hsl(350, 70%, 50%)'];
 
@@ -140,6 +141,7 @@ export default function AdminDashboard() {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'traders', label: 'Traders', icon: TrendingUp },
     { id: 'kyc', label: 'KYC Requests', icon: UserCheck },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'notifications', label: 'Notifications', icon: MessageSquare },
@@ -564,6 +566,7 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'users' && <AdminUsers />}
+        {activeTab === 'traders' && <AdminTraders />}
         {activeTab === 'kyc' && <AdminKYC />}
         {activeTab === 'transactions' && <AdminTransactions />}
         {activeTab === 'notifications' && <AdminNotifications />}

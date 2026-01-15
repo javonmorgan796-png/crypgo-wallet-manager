@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { NotificationsDropdown } from '@/components/notifications/NotificationsDropdown';
 import { LiveCryptoPrices } from '@/components/LiveCryptoPrices';
 import { useAuth } from '@/contexts/AuthContext';
+import { BalanceDisplay } from '@/components/ui/BalanceDisplay';
 
 export function Header() {
   const { user } = useAuth();
@@ -28,13 +29,11 @@ export function Header() {
         {/* Notifications Dropdown */}
         <NotificationsDropdown />
 
-        {/* Balance */}
+        {/* Balance with visibility toggle */}
         <div className="flex items-center gap-3 rounded-lg bg-secondary px-4 py-2">
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Balance</p>
-            <p className="font-semibold text-foreground">
-              ${(user?.balance || 0).toLocaleString()}
-            </p>
+            <BalanceDisplay balance={user?.balance || 0} />
           </div>
         </div>
 
