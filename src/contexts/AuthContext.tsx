@@ -79,12 +79,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await api.login(email, password);
       
       if (result.success && result.data) {
-        // Handle both response structures: result.data.user or result.data directly
-        const userData = result.data.user || result.data;
+        // Handle nested response: result.data may contain { success, data: { token, user } }
+        // or direct format: { token, user }
+        const responseData = result.data as any;
+        let userData = null;
         
-        if (!userData || (!userData.id && !userData._id)) {
-          console.error('Invalid user data received:', result.data);
-          return { success: false, error: 'Invalid response from server. Please try again.' };
+        // Check if response has nested success/data structure
+        if (responseData.data && responseData.data.user) {
+          userData = responseData.data.user;
+        } else if (responseData.user) {
+          userData = responseData.user;
+        } else if (responseData.id || responseData._id) {
+          userData = responseData;
+        }
+        
+        if (!userData) {
+          console.error('Could not extract user data from response:', result.data);
+          return { success: false, error: 'Login failed. Please try again.' };
         }
         
         if (userData.is2FAEnabled) {
