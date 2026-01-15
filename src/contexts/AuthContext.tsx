@@ -79,13 +79,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await api.login(email, password);
       
       if (result.success && result.data) {
-        if (result.data.user?.is2FAEnabled) {
+        // Handle both response structures: result.data.user or result.data directly
+        const userData = result.data.user || result.data;
+        
+        if (!userData || (!userData.id && !userData._id)) {
+          console.error('Invalid user data received:', result.data);
+          return { success: false, error: 'Invalid response from server. Please try again.' };
+        }
+        
+        if (userData.is2FAEnabled) {
           setPending2FA(true);
           return { success: true, requires2FA: true };
         }
         
         // Set user data from login response
-        const userData = result.data.user;
         setUser({
           id: userData.id || userData._id,
           name: userData.name,
