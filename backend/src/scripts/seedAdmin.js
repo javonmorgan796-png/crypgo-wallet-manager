@@ -1,10 +1,8 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/greenbull';
 
-// Define User schema inline to avoid import issues
 const userSchema = new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
@@ -24,53 +22,43 @@ async function seedAdmin() {
 
     const User = mongoose.model('User', userSchema);
 
-    // Check if admin already exists
     const existingAdmin = await User.findOne({ email: 'admin@greenbull.com' });
-    
+
     if (existingAdmin) {
-      console.log('Admin user already exists - updating to ensure admin role');
       await User.updateOne(
         { email: 'admin@greenbull.com' },
-        { 
-          $set: { 
+        {
+          $set: {
+            password: 'admin123', // 👈 PLAIN TEXT
             role: 'admin',
             isVerified: true,
             kycStatus: 'approved'
           }
         }
       );
-      console.log('Admin user updated!');
+
+      console.log('Admin password updated (plain text)');
       console.log('Email: admin@greenbull.com');
-      console.log('Use your existing password to login');
+      console.log('Password: admin123');
       process.exit(0);
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash('Admin@123456', 10);
-
-    // Create admin user
     await User.create({
       name: 'Admin',
       email: 'admin@greenbull.com',
-      password: hashedPassword,
+      password: 'admin123', // 👈 PLAIN TEXT
       role: 'admin',
       isVerified: true,
-      kycStatus: 'approved',
-      balance: 0,
-      totalProfit: 0,
-      totalInvested: 0
+      kycStatus: 'approved'
     });
 
-    console.log('Admin user created successfully!');
-    console.log('=================================');
+    console.log('Admin created');
     console.log('Email: admin@greenbull.com');
-    console.log('Password: Admin@123456');
-    console.log('=================================');
-    console.log('IMPORTANT: Change this password after first login!');
-    
+    console.log('Password: admin123');
+
     process.exit(0);
   } catch (error) {
-    console.error('Error seeding admin:', error);
+    console.error(error);
     process.exit(1);
   }
 }
