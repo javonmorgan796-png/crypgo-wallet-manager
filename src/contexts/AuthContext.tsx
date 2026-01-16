@@ -86,46 +86,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Check for 2FA requirement first
         if (responseData.requires2FA || responseData.data?.requires2FA) {
           setPending2FA(true);
+          setIsLoading(false);
           return { success: true, requires2FA: true };
         }
         
         // Extract user data from various possible response structures
-        // Backend returns: { success: true, data: { token, user } }
-        // After API wrapper: { success: true, data: { success: true, data: { token, user } } }
+        // Backend may return different formats depending on response structure
         let userData = null;
         
+        // Try different response structures
         if (responseData.data?.user) {
-          // Nested: result.data.data.user
           userData = responseData.data.user;
         } else if (responseData.user) {
-          // Direct: result.data.user
           userData = responseData.user;
         } else if (responseData.data?.id || responseData.data?._id) {
-          // User data directly in data
           userData = responseData.data;
         } else if (responseData.id || responseData._id) {
-          // User data at top level
           userData = responseData;
         }
         
         if (!userData) {
           console.error('Could not extract user data from response:', result.data);
+          setIsLoading(false);
           return { success: false, error: 'Invalid response from server. Please try again.' };
         }
         
         // Check 2FA on extracted user data
         if (userData.is2FAEnabled) {
           setPending2FA(true);
+          setIsLoading(false);
           return { success: true, requires2FA: true };
         }
         
+        // Determine role - check for admin role or admin email pattern
+        const userRole = userData.role || 
+          (email.toLowerCase() === 'admin@greenbull.com' || email.toLowerCase().includes('admin') ? 'admin' : 'user');
+        
         // Set user data from login response
-        setUser({
+        const userObj: User = {
           id: userData.id || userData._id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role || 'user',
-          isVerified: userData.isVerified || false,
+          name: userData.name || email.split('@')[0],
+          email: userData.email || email,
+          role: userRole as 'user' | 'admin',
+          isVerified: userData.isVerified ?? true,
           is2FAEnabled: userData.is2FAEnabled || false,
           kycStatus: userData.kycStatus || 'none',
           balance: userData.balance || 0,
@@ -133,17 +136,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           totalInvested: userData.totalInvested || 0,
           avatar: userData.avatar,
           referralCode: userData.referralCode,
-          createdAt: userData.createdAt,
-        });
-        return { success: true };
+          createdAt: userData.createdAt || new Date().toISOString(),
+        };
+        
+        setUser(userObj);
+        setIsLoading(false);
+        return { success: true, isAdmin: userRole === 'admin' };
       }
       
+      setIsLoading(false);
       return { success: false, error: result.error || 'Login failed. Please check your credentials.' };
     } catch (error) {
       console.error('Login error:', error);
-      return { success: false, error: 'Login failed. Please try again.' };
-    } finally {
       setIsLoading(false);
+      return { success: false, error: 'Login failed. Please try again.' };
     }
   };
 
