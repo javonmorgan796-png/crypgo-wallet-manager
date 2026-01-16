@@ -90,7 +90,7 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="name@example.com"
+                  placeholder="Email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 bg-secondary border-border"
@@ -106,7 +106,7 @@ export default function Login() {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
+                  placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10 bg-secondary border-border"
