@@ -38,9 +38,18 @@ export default function Login() {
         description: 'You have successfully logged in.',
       });
       
-      // Redirect based on role - admin goes to admin dashboard
-      if (email === 'admin@greenbull.com') {
-        navigate('/admin');
+      // Redirect based on role - check if user is admin from result or email pattern
+      // The AuthContext will set the user with role, we check localStorage for immediate redirect
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        // Check user role from context or email for admin
+        const isAdminUser = email.toLowerCase() === 'admin@greenbull.com' || 
+                           email.toLowerCase().includes('admin');
+        if (isAdminUser) {
+          navigate('/admin');
+        } else {
+          navigate('/wallet');
+        }
       } else {
         navigate('/wallet');
       }
