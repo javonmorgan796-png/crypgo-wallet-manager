@@ -133,7 +133,7 @@ export default function WalletPage() {
       <div className="space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="font-display text-3xl font-bold text-foreground">Wallet</h1>
+          <h1 className="font-display text-3xl font-bold text-foreground">Account</h1>
           <p className="text-muted-foreground">Manage your cryptocurrency deposits and withdrawals</p>
         </div>
 
