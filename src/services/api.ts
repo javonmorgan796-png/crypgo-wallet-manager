@@ -62,13 +62,21 @@ class ApiService {
 
   // Authentication
   async login(email: string, password: string) {
-    const result = await this.request<{ token: string; user: any }>('/auth/login', {
+    const result = await this.request<any>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
 
-    if (result.success && result.data?.token) {
-      this.setToken(result.data.token);
+    if (result.success && result.data) {
+      // Handle nested response structure from backend
+      // Backend returns: { success: true, data: { token, user } }
+      // After request wrapper: { success: true, data: { success: true, data: { token, user } } }
+      const responseData = result.data;
+      const token = responseData.token || responseData.data?.token;
+      
+      if (token) {
+        this.setToken(token);
+      }
     }
 
     return result;

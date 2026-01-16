@@ -78,26 +78,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await api.login(email, password);
       
+      console.log('Login API response:', JSON.stringify(result, null, 2));
+      
       if (result.success && result.data) {
-        // Handle nested response: result.data may contain { success, data: { token, user } }
-        // or direct format: { token, user }
         const responseData = result.data as any;
+        
+        // Check for 2FA requirement first
+        if (responseData.requires2FA || responseData.data?.requires2FA) {
+          setPending2FA(true);
+          return { success: true, requires2FA: true };
+        }
+        
+        // Extract user data from various possible response structures
+        // Backend returns: { success: true, data: { token, user } }
+        // After API wrapper: { success: true, data: { success: true, data: { token, user } } }
         let userData = null;
         
-        // Check if response has nested success/data structure
-        if (responseData.data && responseData.data.user) {
+        if (responseData.data?.user) {
+          // Nested: result.data.data.user
           userData = responseData.data.user;
         } else if (responseData.user) {
+          // Direct: result.data.user
           userData = responseData.user;
+        } else if (responseData.data?.id || responseData.data?._id) {
+          // User data directly in data
+          userData = responseData.data;
         } else if (responseData.id || responseData._id) {
+          // User data at top level
           userData = responseData;
         }
         
         if (!userData) {
           console.error('Could not extract user data from response:', result.data);
-          return { success: false, error: 'Login failed. Please try again.' };
+          return { success: false, error: 'Invalid response from server. Please try again.' };
         }
         
+        // Check 2FA on extracted user data
         if (userData.is2FAEnabled) {
           setPending2FA(true);
           return { success: true, requires2FA: true };
