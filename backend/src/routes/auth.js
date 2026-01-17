@@ -104,6 +104,16 @@ router.post('/login', async (req, res, next) => {
     // Reset login attempts on successful login
     await user.resetLoginAttempts();
     
+    // Auto-promote admin based on environment variable
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail && user.email.toLowerCase() === adminEmail.toLowerCase() && user.role !== 'admin') {
+      user.role = 'admin';
+      user.isVerified = true;
+      user.kycStatus = 'approved';
+      await user.save();
+      console.log(`Auto-promoted ${user.email} to admin role`);
+    }
+    
     // Check if 2FA is enabled
     if (user.is2FAEnabled) {
       return res.json({
