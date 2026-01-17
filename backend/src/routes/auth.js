@@ -118,6 +118,7 @@ router.post('/login', async (req, res, next) => {
     
     res.json({
       success: true,
+      isAdmin: user.role === 'admin',
       data: {
         token,
         user: {

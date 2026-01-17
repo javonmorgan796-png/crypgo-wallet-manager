@@ -69,14 +69,19 @@ class ApiService {
 
     if (result.success && result.data) {
       // Handle nested response structure from backend
-      // Backend returns: { success: true, data: { token, user } }
-      // After request wrapper: { success: true, data: { success: true, data: { token, user } } }
+      // Backend returns: { success: true, isAdmin: boolean, data: { token, user } }
       const responseData = result.data;
       const token = responseData.token || responseData.data?.token;
       
       if (token) {
         this.setToken(token);
       }
+      
+      // Return isAdmin from server response
+      return {
+        ...result,
+        isAdmin: responseData.isAdmin === true
+      };
     }
 
     return result;
