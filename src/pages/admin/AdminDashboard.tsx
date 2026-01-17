@@ -35,6 +35,19 @@ import { AdminNotifications } from './AdminNotifications';
 import { AdminSettings } from './AdminSettings';
 import { AdminTraders } from './AdminTraders';
 
+// Import error boundary and chart states
+import { ErrorBoundary, ChartErrorBoundary } from '@/components/admin/ErrorBoundary';
+import { ChartEmptyState } from '@/components/admin/ChartEmptyState';
+import { ChartLoadingState } from '@/components/admin/ChartLoadingState';
+
+// Safe formatter for tooltip values
+const safeToLocaleString = (value: unknown): string => {
+  if (value === null || value === undefined) return '0';
+  if (typeof value === 'number') return value.toLocaleString();
+  if (typeof value === 'string') return parseFloat(value).toLocaleString() || '0';
+  return '0';
+};
+
 const CHART_COLORS = ['hsl(142, 76%, 36%)', 'hsl(200, 70%, 50%)', 'hsl(45, 90%, 50%)', 'hsl(280, 60%, 50%)', 'hsl(350, 70%, 50%)'];
 
 export default function AdminDashboard() {
@@ -313,55 +326,58 @@ export default function AdminDashboard() {
                   <CardDescription>Daily transaction volume</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {analyticsLoading ? (
-                    <div className="h-[300px] flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : depositWithdrawalData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={depositWithdrawalData}>
-                        <defs>
-                          <linearGradient id="colorDeposits" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0}/>
-                          </linearGradient>
-                          <linearGradient id="colorWithdrawals" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(0, 70%, 50%)" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="hsl(0, 70%, 50%)" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }}
-                        />
-                        <Legend />
-                        <Area 
-                          type="monotone" 
-                          dataKey="deposits" 
-                          stroke="hsl(142, 76%, 36%)" 
-                          fillOpacity={1} 
-                          fill="url(#colorDeposits)" 
-                        />
-                        <Area 
-                          type="monotone" 
-                          dataKey="withdrawals" 
-                          stroke="hsl(0, 70%, 50%)" 
-                          fillOpacity={1} 
-                          fill="url(#colorWithdrawals)" 
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      No transaction data available
-                    </div>
-                  )}
+                  <ChartErrorBoundary chartName="Deposits vs Withdrawals">
+                    {analyticsLoading ? (
+                      <ChartLoadingState variant="skeleton" />
+                    ) : depositWithdrawalData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <AreaChart data={depositWithdrawalData}>
+                          <defs>
+                            <linearGradient id="colorDeposits" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorWithdrawals" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="hsl(0, 70%, 50%)" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="hsl(0, 70%, 50%)" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                            formatter={(value) => [`$${safeToLocaleString(value)}`, '']}
+                          />
+                          <Legend />
+                          <Area 
+                            type="monotone" 
+                            dataKey="deposits" 
+                            stroke="hsl(142, 76%, 36%)" 
+                            fillOpacity={1} 
+                            fill="url(#colorDeposits)" 
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="withdrawals" 
+                            stroke="hsl(0, 70%, 50%)" 
+                            fillOpacity={1} 
+                            fill="url(#colorWithdrawals)" 
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState 
+                        icon={DollarSign} 
+                        title="No transaction data" 
+                        description="Deposits and withdrawals will appear here."
+                      />
+                    )}
+                  </ChartErrorBoundary>
                 </CardContent>
               </Card>
 
@@ -375,45 +391,48 @@ export default function AdminDashboard() {
                   <CardDescription>Cumulative user registrations</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {analyticsLoading ? (
-                    <div className="h-[300px] flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : userGrowthData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={userGrowthData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }}
-                        />
-                        <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="users" 
-                          stroke="hsl(142, 76%, 36%)" 
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="newUsers" 
-                          stroke="hsl(200, 70%, 50%)" 
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      No user data available
-                    </div>
-                  )}
+                  <ChartErrorBoundary chartName="User Growth">
+                    {analyticsLoading ? (
+                      <ChartLoadingState variant="skeleton" />
+                    ) : userGrowthData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={userGrowthData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                            formatter={(value) => [safeToLocaleString(value), '']}
+                          />
+                          <Legend />
+                          <Line 
+                            type="monotone" 
+                            dataKey="users" 
+                            stroke="hsl(142, 76%, 36%)" 
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="newUsers" 
+                            stroke="hsl(200, 70%, 50%)" 
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState 
+                        icon={Users} 
+                        title="No user data" 
+                        description="User growth will appear here as users sign up."
+                      />
+                    )}
+                  </ChartErrorBoundary>
                 </CardContent>
               </Card>
             </div>
@@ -430,42 +449,44 @@ export default function AdminDashboard() {
                   <CardDescription>Distribution of active investments</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {analyticsLoading ? (
-                    <div className="h-[300px] flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : investmentPlanData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <RechartsPieChart>
-                        <Pie
-                          data={investmentPlanData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {investmentPlanData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }}
-                          formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']}
-                        />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      No investment data available
-                    </div>
-                  )}
+                  <ChartErrorBoundary chartName="Investment by Plan">
+                    {analyticsLoading ? (
+                      <ChartLoadingState />
+                    ) : investmentPlanData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <RechartsPieChart>
+                          <Pie
+                            data={investmentPlanData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name || 'Unknown'} (${((percent ?? 0) * 100).toFixed(0)}%)`}
+                            outerRadius={100}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {investmentPlanData.map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                            formatter={(value) => [`$${safeToLocaleString(value)}`, 'Amount']}
+                          />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState 
+                        icon={PieChart} 
+                        title="No investment plans" 
+                        description="Investment distribution will appear here."
+                      />
+                    )}
+                  </ChartErrorBoundary>
                 </CardContent>
               </Card>
 
@@ -479,32 +500,34 @@ export default function AdminDashboard() {
                   <CardDescription>New investments per day</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {analyticsLoading ? (
-                    <div className="h-[300px] flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : analytics.dailyInvestments.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={analytics.dailyInvestments}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="_id" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                        <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px'
-                          }}
-                          formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, 'Amount']}
-                        />
-                        <Bar dataKey="total" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      No investment data available
-                    </div>
-                  )}
+                  <ChartErrorBoundary chartName="Daily Investments">
+                    {analyticsLoading ? (
+                      <ChartLoadingState variant="skeleton" />
+                    ) : analytics.dailyInvestments.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={analytics.dailyInvestments}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="_id" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                            formatter={(value) => [`$${safeToLocaleString(value)}`, 'Amount']}
+                          />
+                          <Bar dataKey="total" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <ChartEmptyState 
+                        icon={TrendingUp} 
+                        title="No investment data" 
+                        description="Daily investments will appear here."
+                      />
+                    )}
+                  </ChartErrorBoundary>
                 </CardContent>
               </Card>
             </div>
@@ -565,12 +588,36 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'users' && <AdminUsers />}
-        {activeTab === 'traders' && <AdminTraders />}
-        {activeTab === 'kyc' && <AdminKYC />}
-        {activeTab === 'transactions' && <AdminTransactions />}
-        {activeTab === 'notifications' && <AdminNotifications />}
-        {activeTab === 'settings' && <AdminSettings />}
+        {activeTab === 'users' && (
+          <ErrorBoundary fallbackTitle="Users section error" fallbackDescription="Failed to load users management.">
+            <AdminUsers />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'traders' && (
+          <ErrorBoundary fallbackTitle="Traders section error" fallbackDescription="Failed to load traders management.">
+            <AdminTraders />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'kyc' && (
+          <ErrorBoundary fallbackTitle="KYC section error" fallbackDescription="Failed to load KYC requests.">
+            <AdminKYC />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'transactions' && (
+          <ErrorBoundary fallbackTitle="Transactions section error" fallbackDescription="Failed to load transactions.">
+            <AdminTransactions />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'notifications' && (
+          <ErrorBoundary fallbackTitle="Notifications section error" fallbackDescription="Failed to load notifications.">
+            <AdminNotifications />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'settings' && (
+          <ErrorBoundary fallbackTitle="Settings section error" fallbackDescription="Failed to load settings.">
+            <AdminSettings />
+          </ErrorBoundary>
+        )}
       </main>
     </div>
   );
