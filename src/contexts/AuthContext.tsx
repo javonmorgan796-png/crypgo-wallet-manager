@@ -118,9 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: true, requires2FA: true };
         }
         
-        // Determine role - check for admin role or admin email pattern
-        const userRole = userData.role || 
-          (email.toLowerCase() === 'admin@greenbull.com' || email.toLowerCase().includes('admin') ? 'admin' : 'user');
+        // Trust the server's role - never guess admin status client-side
+        const userRole = userData.role || 'user';
         
         // Set user data from login response
         const userObj: User = {
