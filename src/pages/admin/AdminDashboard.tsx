@@ -495,7 +495,7 @@ export default function AdminDashboard() {
                             border: '1px solid hsl(var(--border))',
                             borderRadius: '8px'
                           }}
-                          formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']}
+                          formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, 'Amount']}
                         />
                         <Bar dataKey="total" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
                       </BarChart>
