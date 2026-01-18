@@ -400,6 +400,31 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Admin: Investment plan management
+  async adminGetInvestmentPlans() {
+    return this.request<any[]>('/investments/admin/plans');
+  }
+
+  async adminCreateInvestmentPlan(data: any) {
+    return this.request('/investments/admin/plans', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminUpdateInvestmentPlan(id: string, data: any) {
+    return this.request(`/investments/admin/plans/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminDeleteInvestmentPlan(id: string) {
+    return this.request(`/investments/admin/plans/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiService();

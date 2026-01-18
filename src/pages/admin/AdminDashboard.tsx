@@ -11,7 +11,6 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Clock,
-  CheckCircle,
   LogOut,
   LayoutDashboard,
   UserCheck,
@@ -21,7 +20,9 @@ import {
   TrendingUp,
   PieChart,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -36,11 +37,14 @@ import { AdminTransactions } from './AdminTransactions';
 import { AdminNotifications } from './AdminNotifications';
 import { AdminSettings } from './AdminSettings';
 import { AdminTraders } from './AdminTraders';
+import { AdminInvestmentPlans } from './AdminInvestmentPlans';
 
 // Import error boundary and chart states
 import { ErrorBoundary, ChartErrorBoundary } from '@/components/admin/ErrorBoundary';
 import { ChartEmptyState } from '@/components/admin/ChartEmptyState';
 import { ChartLoadingState } from '@/components/admin/ChartLoadingState';
+import { AdminMobileNav } from '@/components/admin/AdminMobileNav';
+import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
 
 // Safe formatter for tooltip values
 const safeToLocaleString = (value: unknown): string => {
@@ -136,6 +140,14 @@ export default function AdminDashboard() {
     fetchAnalytics(false);
   }, [period]);
 
+  // WebSocket for real-time updates
+  const { isConnected: wsConnected } = useAdminWebSocket((event) => {
+    // Auto-refresh data when new events arrive
+    if (['new_deposit', 'new_withdrawal', 'new_kyc', 'new_user', 'new_investment'].includes(event.event)) {
+      refreshData(true);
+    }
+  });
+
   // Auto-refresh every 30 seconds
   useEffect(() => {
     if (autoRefresh) {
@@ -186,6 +198,7 @@ export default function AdminDashboard() {
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'traders', label: 'Traders', icon: TrendingUp },
+    { id: 'investment-plans', label: 'Investment Plans', icon: DollarSign },
     { id: 'kyc', label: 'KYC Requests', icon: UserCheck },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'notifications', label: 'Notifications', icon: MessageSquare },
@@ -194,13 +207,27 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-card border-r border-border p-4 flex flex-col">
+      {/* Mobile Navigation */}
+      <AdminMobileNav 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab}
+        stats={stats}
+      />
+
+      {/* Sidebar - Hidden on mobile */}
+      <aside className="w-64 bg-card border-r border-border p-4 flex-col hidden lg:flex">
         <div className="flex items-center gap-3 mb-8 px-2">
           <img src={logo} alt="Green Bull" className="h-10 w-10" />
           <div>
             <h1 className="font-bold text-lg">Green Bull</h1>
-            <p className="text-xs text-muted-foreground">Admin Panel</p>
+            <div className="flex items-center gap-1">
+              <p className="text-xs text-muted-foreground">Admin Panel</p>
+              {wsConnected ? (
+                <Wifi className="h-3 w-3 text-primary" />
+              ) : (
+                <WifiOff className="h-3 w-3 text-muted-foreground" />
+              )}
+            </div>
           </div>
         </div>
 
@@ -248,7 +275,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 p-4 lg:p-8 overflow-auto pt-20 lg:pt-8">
         {activeTab === 'overview' && (
           <div className="space-y-8">
             <div className="flex items-center justify-between">
@@ -654,6 +681,11 @@ export default function AdminDashboard() {
         {activeTab === 'traders' && (
           <ErrorBoundary fallbackTitle="Traders section error" fallbackDescription="Failed to load traders management.">
             <AdminTraders />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'investment-plans' && (
+          <ErrorBoundary fallbackTitle="Investment Plans section error" fallbackDescription="Failed to load investment plans.">
+            <AdminInvestmentPlans />
           </ErrorBoundary>
         )}
         {activeTab === 'kyc' && (
