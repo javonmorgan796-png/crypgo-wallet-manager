@@ -1,32 +1,165 @@
 const express = require('express');
 const Investment = require('../models/Investment');
+const InvestmentPlan = require('../models/InvestmentPlan');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
-const { protect } = require('../middleware/auth');
+const { protect, adminOnly } = require('../middleware/auth');
+const { notifyNewInvestment } = require('../websocket/adminUpdates');
 
 const router = express.Router();
 
-// Investment Plans Configuration
-const investmentPlans = {
-  // Fixed Tier Plans
-  bronze: { id: 'bronze', name: 'Bronze', type: 'fixed', minAmount: 100, maxAmount: 999, roi: 10, duration: 30 },
-  silver: { id: 'silver', name: 'Silver', type: 'fixed', minAmount: 1000, maxAmount: 4999, roi: 20, duration: 60 },
-  gold: { id: 'gold', name: 'Gold', type: 'fixed', minAmount: 5000, maxAmount: 19999, roi: 30, duration: 90 },
-  platinum: { id: 'platinum', name: 'Platinum', type: 'fixed', minAmount: 20000, maxAmount: 100000, roi: 50, duration: 180 },
-  // Time-based Plans
-  'time-30': { id: 'time-30', name: '30-Day Sprint', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 8, duration: 30 },
-  'time-90': { id: 'time-90', name: '90-Day Growth', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 18, duration: 90 },
-  'time-180': { id: 'time-180', name: '180-Day Builder', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 35, duration: 180 },
-  'time-365': { id: 'time-365', name: '365-Day Maximizer', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 80, duration: 365 },
-};
+// Default investment plans (seeded if DB is empty)
+const defaultPlans = [
+  { name: 'Bronze', type: 'fixed', minAmount: 100, maxAmount: 999, roi: 10, duration: 30, description: 'Perfect for beginners', features: ['10% ROI', '30-day lock period', 'Daily updates', 'Basic support'] },
+  { name: 'Silver', type: 'fixed', minAmount: 1000, maxAmount: 4999, roi: 20, duration: 60, description: 'Ideal for intermediate investors', features: ['20% ROI', '60-day lock period', 'Priority support', 'Weekly reports'], popular: true },
+  { name: 'Gold', type: 'fixed', minAmount: 5000, maxAmount: 19999, roi: 30, duration: 90, description: 'For serious investors', features: ['30% ROI', '90-day lock period', '24/7 support', 'Personal manager'] },
+  { name: 'Platinum', type: 'fixed', minAmount: 20000, maxAmount: 100000, roi: 50, duration: 180, description: 'Elite tier for maximum returns', features: ['50% ROI', '180-day lock period', 'VIP support', 'Exclusive insights'] },
+  { name: '30-Day Sprint', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 8, duration: 30, description: 'Quick returns in just 30 days', features: ['8% ROI', 'Short commitment', 'Fast liquidity', 'Standard support'] },
+  { name: '90-Day Growth', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 18, duration: 90, description: 'Balanced growth over 3 months', features: ['18% ROI', 'Medium term', 'Good returns', 'Priority support'] },
+  { name: '180-Day Builder', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 35, duration: 180, description: 'Build wealth over 6 months', features: ['35% ROI', 'Long term gains', 'Compound growth', 'Premium support'] },
+  { name: '365-Day Maximizer', type: 'time-based', minAmount: 500, maxAmount: 50000, roi: 80, duration: 365, description: 'Maximum returns over a full year', features: ['80% ROI', 'Best long-term value', 'Full compounding', 'VIP support'] },
+];
 
-// Get all investment plans
-router.get('/plans', (req, res) => {
-  res.json({
-    success: true,
-    data: Object.values(investmentPlans)
-  });
+// Seed default plans if none exist
+async function ensurePlansExist() {
+  try {
+    const count = await InvestmentPlan.countDocuments();
+    if (count === 0) {
+      await InvestmentPlan.insertMany(defaultPlans);
+      console.log('Default investment plans seeded');
+    }
+  } catch (error) {
+    console.error('Error seeding investment plans:', error);
+  }
+}
+ensurePlansExist();
+
+// Get all active investment plans (public)
+router.get('/plans', async (req, res, next) => {
+  try {
+    const plans = await InvestmentPlan.find({ isActive: true }).sort('minAmount');
+    res.json({
+      success: true,
+      data: plans.map(p => ({
+        id: p._id.toString(),
+        name: p.name,
+        type: p.type,
+        minAmount: p.minAmount,
+        maxAmount: p.maxAmount,
+        roi: p.roi,
+        duration: p.duration,
+        description: p.description,
+        features: p.features,
+        popular: p.popular
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Admin: Get all plans (including inactive)
+router.get('/admin/plans', protect, adminOnly, async (req, res, next) => {
+  try {
+    const plans = await InvestmentPlan.find().sort('-createdAt');
+    res.json({
+      success: true,
+      data: plans
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Admin: Create new plan
+router.post('/admin/plans', protect, adminOnly, async (req, res, next) => {
+  try {
+    const { name, type, minAmount, maxAmount, roi, duration, description, features, popular, isActive } = req.body;
+    
+    const plan = await InvestmentPlan.create({
+      name,
+      type,
+      minAmount,
+      maxAmount,
+      roi,
+      duration,
+      description,
+      features: features || [],
+      popular: popular || false,
+      isActive: isActive !== false
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Investment plan created successfully',
+      data: plan
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Admin: Update plan
+router.put('/admin/plans/:id', protect, adminOnly, async (req, res, next) => {
+  try {
+    const plan = await InvestmentPlan.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plan not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Plan updated successfully',
+      data: plan
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Admin: Delete plan
+router.delete('/admin/plans/:id', protect, adminOnly, async (req, res, next) => {
+  try {
+    const plan = await InvestmentPlan.findById(req.params.id);
+    
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plan not found'
+      });
+    }
+    
+    // Check if there are active investments using this plan
+    const activeInvestments = await Investment.countDocuments({ 
+      planId: req.params.id, 
+      status: 'active' 
+    });
+    
+    if (activeInvestments > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete plan with ${activeInvestments} active investments. Deactivate it instead.`
+      });
+    }
+    
+    await InvestmentPlan.findByIdAndDelete(req.params.id);
+    
+    res.json({
+      success: true,
+      message: 'Plan deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Get user's investments
@@ -56,11 +189,12 @@ router.post('/create', protect, async (req, res, next) => {
   try {
     const { planId, amount } = req.body;
     
-    const plan = investmentPlans[planId];
-    if (!plan) {
+    // Find plan from database
+    const plan = await InvestmentPlan.findById(planId);
+    if (!plan || !plan.isActive) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid investment plan'
+        message: 'Invalid or inactive investment plan'
       });
     }
     
@@ -90,7 +224,7 @@ router.post('/create', protect, async (req, res, next) => {
     // Create investment
     const investment = await Investment.create({
       user: req.user._id,
-      planId: plan.id,
+      planId: plan._id.toString(),
       planName: plan.name,
       planType: plan.type,
       amount: investAmount,
@@ -124,6 +258,9 @@ router.post('/create', protect, async (req, res, next) => {
       message: `You have invested $${investAmount.toLocaleString()} in ${plan.name}. Expected return: $${expectedReturn.toLocaleString()} after ${plan.duration} days.`,
       type: 'investment'
     });
+    
+    // Notify admins via WebSocket
+    notifyNewInvestment(investment);
     
     res.status(201).json({
       success: true,

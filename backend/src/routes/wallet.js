@@ -1,19 +1,34 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect, verifiedOnly } = require('../middleware/auth');
 const { sendEmail, emailTemplates } = require('../utils/nodemailer');
+const { notifyNewDeposit, notifyNewWithdrawal } = require('../websocket/adminUpdates');
 
 const router = express.Router();
 
-// Configure multer for file uploads
+// Ensure upload directory exists
+const uploadDir = './uploads/receipts';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure multer for file uploads - use memory storage for flexibility
 const storage = multer.diskStorage({
-  destination: './uploads/receipts',
+  destination: (req, file, cb) => {
+    // Ensure directory exists before saving
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
   filename: (req, file, cb) => {
-    cb(null, `${req.user._id}-${Date.now()}${path.extname(file.originalname)}`);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
 
@@ -21,11 +36,11 @@ const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|pdf/;
+    const allowedTypes = /jpeg|jpg|png|pdf|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    const mimetype = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
     
-    if (extname && mimetype) {
+    if (extname || mimetype) {
       return cb(null, true);
     }
     cb(new Error('Only images and PDFs are allowed'));
@@ -44,45 +59,72 @@ router.get('/balance', protect, async (req, res) => {
 });
 
 // Deposit
-router.post('/deposit', protect, upload.single('receipt'), async (req, res, next) => {
-  try {
-    const { amount, method } = req.body;
-    
-    if (!amount || amount <= 0) {
+router.post('/deposit', protect, (req, res, next) => {
+  upload.single('receipt')(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      console.error('Multer error:', err);
       return res.status(400).json({
         success: false,
-        message: 'Invalid amount'
+        message: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 5MB)' : err.message
+      });
+    } else if (err) {
+      console.error('Upload error:', err);
+      return res.status(400).json({
+        success: false,
+        message: err.message || 'File upload failed'
       });
     }
     
-    const transaction = await Transaction.create({
-      user: req.user._id,
-      type: 'deposit',
-      amount: parseFloat(amount),
-      method,
-      status: 'pending',
-      receiptUrl: req.file ? `/uploads/receipts/${req.file.filename}` : undefined
-    });
-    
-    // Create notification
-    await Notification.create({
-      user: req.user._id,
-      title: 'Deposit Pending',
-      message: `Your deposit of $${amount} is pending approval.`,
-      type: 'transaction'
-    });
-    
-    res.status(201).json({
-      success: true,
-      message: 'Deposit request submitted successfully',
-      data: {
-        transactionId: transaction._id,
-        status: transaction.status
+    try {
+      const { amount, method } = req.body;
+      
+      if (!amount || parseFloat(amount) <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid amount'
+        });
       }
-    });
-  } catch (error) {
-    next(error);
-  }
+      
+      if (parseFloat(amount) < 100) {
+        return res.status(400).json({
+          success: false,
+          message: 'Minimum deposit is $100'
+        });
+      }
+      
+      const transaction = await Transaction.create({
+        user: req.user._id,
+        type: 'deposit',
+        amount: parseFloat(amount),
+        method: method || 'crypto',
+        status: 'pending',
+        receiptUrl: req.file ? `/uploads/receipts/${req.file.filename}` : undefined
+      });
+      
+      // Create notification
+      await Notification.create({
+        user: req.user._id,
+        title: 'Deposit Pending',
+        message: `Your deposit of $${amount} is pending approval.`,
+        type: 'transaction'
+      });
+      
+      // Notify admins via WebSocket
+      notifyNewDeposit(transaction);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Deposit request submitted successfully',
+        data: {
+          transactionId: transaction._id,
+          status: transaction.status
+        }
+      });
+    } catch (error) {
+      console.error('Deposit error:', error);
+      next(error);
+    }
+  });
 });
 
 // Withdraw

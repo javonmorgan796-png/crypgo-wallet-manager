@@ -20,6 +20,7 @@ const copyTradeRoutes = require('./routes/copyTrade');
 // Import WebSocket handlers
 const { setupWebSocket } = require('./websocket/priceUpdates');
 const { setupBalanceWebSocket } = require('./websocket/balanceUpdates');
+const { setupAdminUpdates } = require('./websocket/adminUpdates');
 
 // Import cron jobs
 const { startCronJobs } = require('./cron/investmentCron');
@@ -35,6 +36,10 @@ setupWebSocket(priceWss);
 const balanceWss = new WebSocket.Server({ noServer: true });
 setupBalanceWebSocket(balanceWss);
 
+// WebSocket setup for admin updates
+const adminWss = new WebSocket.Server({ noServer: true });
+setupAdminUpdates(adminWss);
+
 // Handle WebSocket upgrade requests
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url;
@@ -46,6 +51,10 @@ server.on('upgrade', (request, socket, head) => {
   } else if (pathname === '/ws/balance') {
     balanceWss.handleUpgrade(request, socket, head, (ws) => {
       balanceWss.emit('connection', ws, request);
+    });
+  } else if (pathname === '/ws/admin') {
+    adminWss.handleUpgrade(request, socket, head, (ws) => {
+      adminWss.emit('connection', ws, request);
     });
   } else {
     socket.destroy();
