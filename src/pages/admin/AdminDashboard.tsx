@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,12 +20,14 @@ import {
   Settings,
   TrendingUp,
   PieChart,
-  Loader2
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import api from '@/services/api';
 import logo from '@/assets/logo.png';
+import { toast } from 'sonner';
 
 // Import admin sub-components
 import { AdminUsers } from './AdminUsers';
@@ -77,23 +79,13 @@ export default function AdminDashboard() {
     userGrowth: [],
   });
 
-  useEffect(() => {
-    if (!isAdmin) {
-      navigate('/dashboard');
-    }
-  }, [isAdmin, navigate]);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    fetchStats();
-    fetchAnalytics();
-  }, []);
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, [period]);
-
-  const fetchStats = async () => {
-    setIsLoading(true);
+  const fetchStats = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const result = await api.adminGetDashboardStats();
       if (result.success && result.data) {
@@ -102,12 +94,12 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchAnalytics = async () => {
-    setAnalyticsLoading(true);
+  const fetchAnalytics = useCallback(async (silent = false) => {
+    if (!silent) setAnalyticsLoading(true);
     try {
       const result = await api.adminGetDashboardAnalytics(period);
       if (result.success && result.data) {
@@ -116,9 +108,48 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
     } finally {
-      setAnalyticsLoading(false);
+      if (!silent) setAnalyticsLoading(false);
     }
-  };
+  }, [period]);
+
+  const refreshData = useCallback(async (silent = false) => {
+    if (!silent) setIsRefreshing(true);
+    await Promise.all([fetchStats(silent), fetchAnalytics(silent)]);
+    setLastRefresh(new Date());
+    if (!silent) {
+      setIsRefreshing(false);
+      toast.success('Dashboard data refreshed');
+    }
+  }, [fetchStats, fetchAnalytics]);
+
+  // Initial data fetch
+  useEffect(() => {
+    if (!isAdmin) {
+      navigate('/dashboard');
+      return;
+    }
+    refreshData(false);
+  }, [isAdmin, navigate]);
+
+  // Refetch analytics when period changes
+  useEffect(() => {
+    fetchAnalytics(false);
+  }, [period]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    if (autoRefresh) {
+      refreshIntervalRef.current = setInterval(() => {
+        refreshData(true);
+      }, 30000);
+    }
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [autoRefresh, refreshData]);
 
   const handleLogout = () => {
     logout();
@@ -226,6 +257,23 @@ export default function AdminDashboard() {
                 <p className="text-muted-foreground">Welcome back, {user?.name}</p>
               </div>
               <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Last update: {lastRefresh.toLocaleTimeString()}</span>
+                  {autoRefresh && (
+                    <Badge variant="secondary" className="text-xs">
+                      Auto-refresh ON
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className={autoRefresh ? 'border-primary text-primary' : ''}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1 ${autoRefresh ? 'animate-spin' : ''}`} />
+                  {autoRefresh ? 'Auto' : 'Manual'}
+                </Button>
                 <Select value={period} onValueChange={setPeriod}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Select period" />
@@ -237,8 +285,18 @@ export default function AdminDashboard() {
                     <SelectItem value="365">Last year</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button onClick={fetchStats} variant="outline" size="sm">
-                  Refresh
+                <Button 
+                  onClick={() => refreshData(false)} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={isRefreshing}
+                >
+                  {isRefreshing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="ml-1">Refresh</span>
                 </Button>
               </div>
             </div>
