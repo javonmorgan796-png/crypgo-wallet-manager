@@ -37,13 +37,19 @@ class ApiService {
         headers,
       });
 
-      const data = await response.json();
+      const responseData = await response.json();
 
       if (!response.ok) {
-        return { success: false, error: data.message || 'Request failed' };
+        return { success: false, error: responseData.message || 'Request failed' };
       }
 
-      return { success: true, data };
+      // Backend already returns { success: true, data: ... } format
+      // Return the response as-is if it has success field, otherwise wrap it
+      if (responseData && typeof responseData.success === 'boolean') {
+        return responseData;
+      }
+
+      return { success: true, data: responseData };
     } catch (error) {
       console.error('API Error:', error);
       return { success: false, error: 'Network error. Please try again.' };
