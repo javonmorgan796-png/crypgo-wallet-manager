@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Check, Clock, Zap, Crown, Star, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Check, Clock, Zap, Crown, Star, Loader2, RefreshCw } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserData } from '@/hooks/useUserData';
+import { useUserWebSocket } from '@/hooks/useUserWebSocket';
 import api from '@/services/api';
 import {
   Dialog,
@@ -18,100 +19,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-// Investment plans - stored in frontend since they're static configuration
-const investmentPlans = [
-  // Fixed Tier Plans
-  {
-    id: 'bronze',
-    name: 'Bronze',
-    type: 'fixed',
-    minAmount: 100,
-    maxAmount: 999,
-    roi: 10,
-    duration: 30,
-    description: 'Perfect for beginners starting their crypto investment journey',
-    features: ['10% ROI', '30-day lock period', 'Daily updates', 'Basic support'],
-  },
-  {
-    id: 'silver',
-    name: 'Silver',
-    type: 'fixed',
-    minAmount: 1000,
-    maxAmount: 4999,
-    roi: 20,
-    duration: 60,
-    description: 'Ideal for intermediate investors looking for steady growth',
-    features: ['20% ROI', '60-day lock period', 'Priority support', 'Weekly reports'],
-    popular: true,
-  },
-  {
-    id: 'gold',
-    name: 'Gold',
-    type: 'fixed',
-    minAmount: 5000,
-    maxAmount: 19999,
-    roi: 30,
-    duration: 90,
-    description: 'For serious investors seeking substantial returns',
-    features: ['30% ROI', '90-day lock period', '24/7 support', 'Personal manager'],
-  },
-  {
-    id: 'platinum',
-    name: 'Platinum',
-    type: 'fixed',
-    minAmount: 20000,
-    maxAmount: 100000,
-    roi: 50,
-    duration: 180,
-    description: 'Elite tier for maximum returns and exclusive benefits',
-    features: ['50% ROI', '180-day lock period', 'VIP support', 'Exclusive insights'],
-  },
-  // Time-based Plans
-  {
-    id: 'time-30',
-    name: '30-Day Sprint',
-    type: 'time-based',
-    minAmount: 500,
-    maxAmount: 50000,
-    roi: 8,
-    duration: 30,
-    description: 'Quick returns in just 30 days',
-    features: ['8% ROI', 'Short commitment', 'Fast liquidity', 'Standard support'],
-  },
-  {
-    id: 'time-90',
-    name: '90-Day Growth',
-    type: 'time-based',
-    minAmount: 500,
-    maxAmount: 50000,
-    roi: 18,
-    duration: 90,
-    description: 'Balanced growth over 3 months',
-    features: ['18% ROI', 'Medium term', 'Good returns', 'Priority support'],
-  },
-  {
-    id: 'time-180',
-    name: '180-Day Builder',
-    type: 'time-based',
-    minAmount: 500,
-    maxAmount: 50000,
-    roi: 35,
-    duration: 180,
-    description: 'Build wealth over 6 months',
-    features: ['35% ROI', 'Long term gains', 'Compound growth', 'Premium support'],
-  },
-  {
-    id: 'time-365',
-    name: '365-Day Maximizer',
-    type: 'time-based',
-    minAmount: 500,
-    maxAmount: 50000,
-    roi: 80,
-    duration: 365,
-    description: 'Maximum returns over a full year',
-    features: ['80% ROI', 'Best long-term value', 'Full compounding', 'VIP support'],
-  },
-];
+interface InvestmentPlan {
+  id: string;
+  name: string;
+  type: 'fixed' | 'time-based';
+  minAmount: number;
+  maxAmount: number;
+  roi: number;
+  duration: number;
+  description: string;
+  features: string[];
+  popular?: boolean;
+}
 
 interface Investment {
   _id: string;
@@ -133,7 +52,9 @@ export default function Investments() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isInvesting, setIsInvesting] = useState(false);
   const [myInvestments, setMyInvestments] = useState<Investment[]>([]);
+  const [investmentPlans, setInvestmentPlans] = useState<InvestmentPlan[]>([]);
   const [isLoadingInvestments, setIsLoadingInvestments] = useState(true);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const { toast } = useToast();
   const { refreshUser } = useAuth();
   const { balance } = useUserData();
@@ -141,7 +62,21 @@ export default function Investments() {
   const fixedPlans = investmentPlans.filter((p) => p.type === 'fixed');
   const timeBasedPlans = investmentPlans.filter((p) => p.type === 'time-based');
 
-  const fetchMyInvestments = async () => {
+  const fetchInvestmentPlans = useCallback(async () => {
+    setIsLoadingPlans(true);
+    try {
+      const result = await api.getInvestmentPlans();
+      if (result.success && result.data) {
+        setInvestmentPlans(Array.isArray(result.data) ? result.data : []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch investment plans:', error);
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  }, []);
+
+  const fetchMyInvestments = useCallback(async () => {
     setIsLoadingInvestments(true);
     try {
       const result = await api.getMyInvestments();
@@ -153,11 +88,24 @@ export default function Investments() {
     } finally {
       setIsLoadingInvestments(false);
     }
-  };
+  }, []);
+
+  // WebSocket for real-time updates
+  useUserWebSocket({
+    onInvestmentPlansUpdate: (plans) => {
+      setInvestmentPlans(plans);
+    },
+    onDataRefresh: (type) => {
+      if (type === 'investment_plans') {
+        fetchInvestmentPlans();
+      }
+    }
+  });
 
   useEffect(() => {
+    fetchInvestmentPlans();
     fetchMyInvestments();
-  }, []);
+  }, [fetchInvestmentPlans, fetchMyInvestments]);
 
   const handleInvest = async () => {
     const plan = investmentPlans.find((p) => p.id === selectedPlan);
@@ -233,9 +181,20 @@ export default function Investments() {
             <h1 className="font-display text-3xl font-bold text-foreground">Investment Plans</h1>
             <p className="text-muted-foreground">Choose a plan that fits your investment goals</p>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Available Balance</p>
-            <p className="text-xl font-bold text-primary">${balance.toLocaleString()}</p>
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => { fetchInvestmentPlans(); fetchMyInvestments(); }}
+              className="border-border"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Available Balance</p>
+              <p className="text-xl font-bold text-primary">${balance.toLocaleString()}</p>
+            </div>
           </div>
         </div>
 
@@ -253,6 +212,15 @@ export default function Investments() {
           </TabsList>
 
           <TabsContent value="fixed" className="space-y-6">
+            {isLoadingPlans ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : fixedPlans.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No fixed tier plans available</p>
+              </div>
+            ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               {fixedPlans.map((plan) => {
                 const Icon = getIcon(plan.name);
@@ -288,6 +256,7 @@ export default function Investments() {
                 );
               })}
             </div>
+            )}
           </TabsContent>
 
           <TabsContent value="time-based" className="space-y-6">
