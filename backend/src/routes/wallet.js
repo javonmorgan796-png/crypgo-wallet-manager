@@ -5,32 +5,25 @@ const fs = require('fs');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const { protect, verifiedOnly } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const { sendEmail, emailTemplates } = require('../utils/nodemailer');
 const { notifyNewDeposit, notifyNewWithdrawal } = require('../websocket/adminUpdates');
 
 const router = express.Router();
 
-// Ensure upload directory exists
-const uploadDir = './uploads/receipts';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure upload directory exists at startup
+const uploadDir = path.join(process.cwd(), 'uploads', 'receipts');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  console.log('Upload directory ready:', uploadDir);
+} catch (err) {
+  console.error('Failed to create upload directory:', err);
 }
 
-// Configure multer for file uploads - use memory storage for flexibility
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Ensure directory exists before saving
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
-});
+// Configure multer for file uploads with memory storage first
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -58,7 +51,7 @@ router.get('/balance', protect, async (req, res) => {
   });
 });
 
-// Deposit
+// Deposit - NO KYC REQUIRED
 router.post('/deposit', protect, (req, res, next) => {
   upload.single('receipt')(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
@@ -91,6 +84,29 @@ router.post('/deposit', protect, (req, res, next) => {
           message: 'Minimum deposit is $100'
         });
       }
+
+      let receiptUrl = null;
+      
+      // Save the file manually if it exists
+      if (req.file && req.file.buffer) {
+        try {
+          // Ensure directory exists
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+          const filename = `${uniqueSuffix}${path.extname(req.file.originalname || '.jpg')}`;
+          const filepath = path.join(uploadDir, filename);
+          
+          fs.writeFileSync(filepath, req.file.buffer);
+          receiptUrl = `/uploads/receipts/${filename}`;
+          console.log('Receipt saved:', receiptUrl);
+        } catch (saveErr) {
+          console.error('Error saving receipt file:', saveErr);
+          // Continue without receipt - don't fail the deposit
+        }
+      }
       
       const transaction = await Transaction.create({
         user: req.user._id,
@@ -98,7 +114,7 @@ router.post('/deposit', protect, (req, res, next) => {
         amount: parseFloat(amount),
         method: method || 'crypto',
         status: 'pending',
-        receiptUrl: req.file ? `/uploads/receipts/${req.file.filename}` : undefined
+        receiptUrl: receiptUrl
       });
       
       // Create notification
@@ -110,7 +126,11 @@ router.post('/deposit', protect, (req, res, next) => {
       });
       
       // Notify admins via WebSocket
-      notifyNewDeposit(transaction);
+      try {
+        notifyNewDeposit(transaction);
+      } catch (wsErr) {
+        console.error('WebSocket notification error:', wsErr);
+      }
       
       res.status(201).json({
         success: true,
@@ -122,13 +142,16 @@ router.post('/deposit', protect, (req, res, next) => {
       });
     } catch (error) {
       console.error('Deposit error:', error);
-      next(error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to process deposit request. Please try again.'
+      });
     }
   });
 });
 
-// Withdraw
-router.post('/withdraw', protect, verifiedOnly, async (req, res, next) => {
+// Withdraw - Email verification required, KYC required for large amounts only
+router.post('/withdraw', protect, async (req, res, next) => {
   try {
     const { amount, address, method } = req.body;
     
@@ -146,7 +169,15 @@ router.post('/withdraw', protect, verifiedOnly, async (req, res, next) => {
       });
     }
     
-    // Check KYC for large withdrawals
+    // Check email verification
+    if (!req.user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please verify your email before withdrawing'
+      });
+    }
+    
+    // Check KYC for large withdrawals (over $1000)
     if (amount > 1000 && req.user.kycStatus !== 'approved') {
       return res.status(400).json({
         success: false,
@@ -171,6 +202,13 @@ router.post('/withdraw', protect, verifiedOnly, async (req, res, next) => {
       type: 'transaction'
     });
     
+    // Notify admins via WebSocket
+    try {
+      notifyNewWithdrawal(transaction);
+    } catch (wsErr) {
+      console.error('WebSocket notification error:', wsErr);
+    }
+    
     res.status(201).json({
       success: true,
       message: 'Withdrawal request submitted successfully',
@@ -180,7 +218,11 @@ router.post('/withdraw', protect, verifiedOnly, async (req, res, next) => {
       }
     });
   } catch (error) {
-    next(error);
+    console.error('Withdrawal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process withdrawal request. Please try again.'
+    });
   }
 });
 

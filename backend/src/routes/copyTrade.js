@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const { protect, adminOnly } = require('../middleware/auth');
+const { notifyTradersUpdate, notifyDataRefresh } = require('../websocket/userUpdates');
 
 const router = express.Router();
 
@@ -254,6 +255,11 @@ router.post('/admin/traders', protect, adminOnly, async (req, res, next) => {
   try {
     const trader = await Trader.create(req.body);
     
+    // Notify all users about the new trader
+    const allTraders = await Trader.find({ isActive: true }).sort('-profitPercentage');
+    notifyTradersUpdate(allTraders);
+    notifyDataRefresh('traders');
+    
     res.status(201).json({
       success: true,
       data: trader
@@ -278,6 +284,11 @@ router.put('/admin/traders/:id', protect, adminOnly, async (req, res, next) => {
         message: 'Trader not found'
       });
     }
+    
+    // Notify all users about the updated trader
+    const allTraders = await Trader.find({ isActive: true }).sort('-profitPercentage');
+    notifyTradersUpdate(allTraders);
+    notifyDataRefresh('traders');
     
     res.json({
       success: true,
@@ -315,6 +326,11 @@ router.delete('/admin/traders/:id', protect, adminOnly, async (req, res, next) =
     
     trader.isActive = false;
     await trader.save();
+    
+    // Notify all users about the removed trader
+    const allTraders = await Trader.find({ isActive: true }).sort('-profitPercentage');
+    notifyTradersUpdate(allTraders);
+    notifyDataRefresh('traders');
     
     res.json({
       success: true,

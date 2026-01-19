@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const { protect, adminOnly } = require('../middleware/auth');
 const { notifyNewInvestment } = require('../websocket/adminUpdates');
+const { notifyInvestmentPlansUpdate, notifyDataRefresh } = require('../websocket/userUpdates');
 
 const router = express.Router();
 
@@ -90,6 +91,11 @@ router.post('/admin/plans', protect, adminOnly, async (req, res, next) => {
       isActive: isActive !== false
     });
     
+    // Notify all users about the new plan
+    const allPlans = await InvestmentPlan.find({ isActive: true }).sort('minAmount');
+    notifyInvestmentPlansUpdate(allPlans);
+    notifyDataRefresh('investment_plans');
+    
     res.status(201).json({
       success: true,
       message: 'Investment plan created successfully',
@@ -115,6 +121,11 @@ router.put('/admin/plans/:id', protect, adminOnly, async (req, res, next) => {
         message: 'Plan not found'
       });
     }
+    
+    // Notify all users about the updated plan
+    const allPlans = await InvestmentPlan.find({ isActive: true }).sort('minAmount');
+    notifyInvestmentPlansUpdate(allPlans);
+    notifyDataRefresh('investment_plans');
     
     res.json({
       success: true,
@@ -152,6 +163,11 @@ router.delete('/admin/plans/:id', protect, adminOnly, async (req, res, next) => 
     }
     
     await InvestmentPlan.findByIdAndDelete(req.params.id);
+    
+    // Notify all users about the removed plan
+    const allPlans = await InvestmentPlan.find({ isActive: true }).sort('minAmount');
+    notifyInvestmentPlansUpdate(allPlans);
+    notifyDataRefresh('investment_plans');
     
     res.json({
       success: true,
