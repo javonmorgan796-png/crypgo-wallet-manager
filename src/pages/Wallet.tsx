@@ -71,22 +71,30 @@ export default function WalletPage() {
 
     setIsSubmitting(true);
     try {
+      console.log('Submitting deposit:', { amount: depositAmount, method: selectedCrypto, file: receiptFile.name });
+      
       const result = await api.deposit(parseFloat(depositAmount), selectedCrypto, receiptFile);
+      
+      console.log('Deposit result:', result);
       
       if (result.success) {
         toast.success(`Deposit of $${depositAmount} submitted! We'll verify your payment shortly.`);
         setDepositAmount('');
         setReceiptFile(null);
         setReceiptPreview(null);
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
         // Refresh user data
         await refreshUser();
         await refreshData();
       } else {
-        toast.error(result.error || 'Failed to submit deposit request');
+        toast.error(result.message || result.error || 'Failed to submit deposit request');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Deposit error:', error);
-      toast.error('Failed to submit deposit. Please try again.');
+      toast.error(error.message || 'Failed to submit deposit. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

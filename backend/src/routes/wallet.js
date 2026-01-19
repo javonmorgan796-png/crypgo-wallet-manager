@@ -53,7 +53,13 @@ router.get('/balance', protect, async (req, res) => {
 
 // Deposit - NO KYC REQUIRED
 router.post('/deposit', protect, (req, res, next) => {
+  console.log('Deposit request received');
+  
   upload.single('receipt')(req, res, async (err) => {
+    console.log('Upload callback triggered');
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file ? 'File present' : 'No file');
+    
     if (err instanceof multer.MulterError) {
       console.error('Multer error:', err);
       return res.status(400).json({
@@ -71,6 +77,8 @@ router.post('/deposit', protect, (req, res, next) => {
     try {
       const { amount, method } = req.body;
       
+      console.log('Processing deposit:', { amount, method });
+      
       if (!amount || parseFloat(amount) <= 0) {
         return res.status(400).json({
           success: false,
@@ -85,10 +93,13 @@ router.post('/deposit', protect, (req, res, next) => {
         });
       }
 
+      // Store receipt as base64 in database if file upload directory isn't available
       let receiptUrl = null;
+      let receiptData = null;
       
-      // Save the file manually if it exists
       if (req.file && req.file.buffer) {
+        console.log('Processing receipt file:', req.file.originalname, req.file.mimetype);
+        
         try {
           // Ensure directory exists
           if (!fs.existsSync(uploadDir)) {
@@ -96,26 +107,37 @@ router.post('/deposit', protect, (req, res, next) => {
           }
           
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-          const filename = `${uniqueSuffix}${path.extname(req.file.originalname || '.jpg')}`;
+          const ext = path.extname(req.file.originalname || '.jpg').toLowerCase();
+          const filename = `${uniqueSuffix}${ext}`;
           const filepath = path.join(uploadDir, filename);
           
           fs.writeFileSync(filepath, req.file.buffer);
           receiptUrl = `/uploads/receipts/${filename}`;
-          console.log('Receipt saved:', receiptUrl);
+          console.log('Receipt saved to disk:', receiptUrl);
         } catch (saveErr) {
-          console.error('Error saving receipt file:', saveErr);
-          // Continue without receipt - don't fail the deposit
+          console.error('Error saving receipt file to disk:', saveErr);
+          // Fallback: Store as base64 data URL
+          const base64 = req.file.buffer.toString('base64');
+          receiptData = `data:${req.file.mimetype};base64,${base64}`;
+          receiptUrl = receiptData;
+          console.log('Receipt stored as base64');
         }
       }
       
-      const transaction = await Transaction.create({
+      const transactionData = {
         user: req.user._id,
         type: 'deposit',
         amount: parseFloat(amount),
         method: method || 'crypto',
         status: 'pending',
         receiptUrl: receiptUrl
-      });
+      };
+      
+      console.log('Creating transaction:', transactionData);
+      
+      const transaction = await Transaction.create(transactionData);
+      
+      console.log('Transaction created:', transaction._id);
       
       // Create notification
       await Notification.create({
@@ -142,9 +164,10 @@ router.post('/deposit', protect, (req, res, next) => {
       });
     } catch (error) {
       console.error('Deposit error:', error);
+      console.error('Error stack:', error.stack);
       res.status(500).json({
         success: false,
-        message: 'Failed to process deposit request. Please try again.'
+        message: error.message || 'Failed to process deposit request. Please try again.'
       });
     }
   });
