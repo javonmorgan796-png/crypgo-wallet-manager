@@ -27,7 +27,7 @@ const transactionSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ['bank_transfer', 'crypto_btc', 'crypto_eth', 'crypto_usdt', 'card', 'other'],
+    // Allow any crypto method string (btc, eth, usdt-trc20, etc.)
   },
   
   // For deposits

@@ -197,14 +197,26 @@ class ApiService {
       formData.append('receipt', receipt);
     }
 
-    const response = await fetch(`${this.baseUrl}/wallet/deposit`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-      },
-      body: formData,
-    });
-    return response.json();
+    try {
+      const response = await fetch(`${this.baseUrl}/wallet/deposit`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { success: false, error: data.message || 'Deposit failed', message: data.message };
+      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('Deposit API error:', error);
+      return { success: false, error: error.message || 'Network error', message: error.message };
+    }
   }
 
   async withdraw(amount: number, address: string, method: string) {
