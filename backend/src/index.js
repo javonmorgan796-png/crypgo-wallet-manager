@@ -76,7 +76,7 @@ app.use(helmet());
 // CORS configuration for multiple origins
 const allowedOrigins = [
   'https://greenb.lovable.app',
-  'https://greebull.onrender.com',
+  // 'https://greebull.onrender.com',
   'https://preview--greenb.lovable.app',
   'https://id-preview--f7fd61ff-0041-4214-af69-75513e876021.lovable.app',
   'http://localhost:5173',
