@@ -38,6 +38,7 @@ import { AdminNotifications } from './AdminNotifications';
 import { AdminSettings } from './AdminSettings';
 import { AdminTraders } from './AdminTraders';
 import { AdminInvestmentPlans } from './AdminInvestmentPlans';
+import { AdminSignals } from './AdminSignals';
 
 // Import error boundary and chart states
 import { ErrorBoundary, ChartErrorBoundary } from '@/components/admin/ErrorBoundary';
@@ -199,6 +200,7 @@ export default function AdminDashboard() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'traders', label: 'Traders', icon: TrendingUp },
     { id: 'investment-plans', label: 'Investment Plans', icon: DollarSign },
+    { id: 'signals', label: 'Signals', icon: TrendingUp },
     { id: 'kyc', label: 'KYC Requests', icon: UserCheck },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
     { id: 'notifications', label: 'Notifications', icon: MessageSquare },
@@ -701,6 +703,11 @@ export default function AdminDashboard() {
         {activeTab === 'notifications' && (
           <ErrorBoundary fallbackTitle="Notifications section error" fallbackDescription="Failed to load notifications.">
             <AdminNotifications />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'signals' && (
+          <ErrorBoundary fallbackTitle="Signals section error" fallbackDescription="Failed to load signals.">
+            <AdminSignals />
           </ErrorBoundary>
         )}
         {activeTab === 'settings' && (

@@ -16,6 +16,7 @@ const adminRoutes = require('./routes/admin');
 const notificationRoutes = require('./routes/notifications');
 const investmentRoutes = require('./routes/investments');
 const copyTradeRoutes = require('./routes/copyTrade');
+const signalRoutes = require('./routes/signals');
 
 // Import WebSocket handlers
 const { setupWebSocket } = require('./websocket/priceUpdates');
@@ -128,6 +129,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
+app.use('/api/signals', signalRoutes);
 
 // Transactions route (for user transactions)
 app.use('/api/transactions', require('./routes/wallet'));

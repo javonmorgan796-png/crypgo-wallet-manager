@@ -437,6 +437,42 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Signals
+  async getSignals(status: string = 'active') {
+    return this.request<any[]>(`/signals?status=${status}`);
+  }
+
+  async adminGetSignals() {
+    return this.request<any[]>('/signals/admin');
+  }
+
+  async adminCreateSignal(data: any) {
+    return this.request('/signals/admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminUpdateSignal(id: string, data: any) {
+    return this.request(`/signals/admin/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminCloseSignal(id: string, data: { closedPrice: number; result: string }) {
+    return this.request(`/signals/admin/${id}/close`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminDeleteSignal(id: string) {
+    return this.request(`/signals/admin/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiService();

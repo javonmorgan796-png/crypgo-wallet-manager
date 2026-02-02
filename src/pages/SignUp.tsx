@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, User, CheckCircle2, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, CheckCircle2, Loader2, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +17,8 @@ export default function SignUp() {
   const [isLoading, setIsLoading] = useState(false);
   const [signupComplete, setSignupComplete] = useState(false);
   const [searchParams] = useSearchParams();
-  const referralCode = searchParams.get('ref');
+  const urlReferralCode = searchParams.get('ref');
+  const [referralCodeInput, setReferralCodeInput] = useState(urlReferralCode || '');
   
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -47,7 +48,8 @@ export default function SignUp() {
     setIsLoading(true);
     
     try {
-      const result = await signup(name, email, password, referralCode || undefined);
+      const referralToUse = referralCodeInput.trim() || undefined;
+      const result = await signup(name, email, password, referralToUse);
       
       if (result.success) {
         setSignupComplete(true);
@@ -222,6 +224,27 @@ export default function SignUp() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="referralCode">Referral Code (Optional)</Label>
+              <div className="relative">
+                <Gift className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="referralCode"
+                  type="text"
+                  placeholder="Enter referral code"
+                  value={referralCodeInput}
+                  onChange={(e) => setReferralCodeInput(e.target.value.toUpperCase())}
+                  className="pl-10 bg-secondary border-border"
+                />
+              </div>
+              {referralCodeInput && (
+                <p className="text-xs text-primary flex items-center gap-1">
+                  <Gift className="h-3 w-3" />
+                  You'll receive a bonus after signing up!
+                </p>
+              )}
+            </div>
+
             <div className="flex items-start gap-2">
               <input type="checkbox" className="mt-1 rounded border-border" required />
               <span className="text-sm text-muted-foreground">
@@ -246,12 +269,6 @@ export default function SignUp() {
                 'Create Account'
               )}
             </Button>
-            
-            {referralCode && (
-              <p className="text-sm text-muted-foreground text-center">
-                🎁 You were referred! You'll receive a bonus after signing up.
-              </p>
-            )}
           </form>
 
           {/* Footer */}

@@ -131,6 +131,17 @@ function notifyDataRefresh(type) {
   });
 }
 
+// Notify about signal updates
+function notifySignalUpdate(action, signal) {
+  broadcastToAllUsers('signal_update', {
+    action,
+    signal,
+    message: action === 'new_signal' 
+      ? `New ${signal.type.toUpperCase()} signal for ${signal.asset}` 
+      : `Signal for ${signal.asset} has been updated`
+  });
+}
+
 module.exports = {
   setupUserUpdates,
   broadcastToAllUsers,
@@ -141,5 +152,6 @@ module.exports = {
   notifyTransactionUpdate,
   notifyInvestmentUpdate,
   notifyCopyTradeUpdate,
-  notifyDataRefresh
+  notifyDataRefresh,
+  notifySignalUpdate
 };

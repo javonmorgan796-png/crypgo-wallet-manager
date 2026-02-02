@@ -35,6 +35,7 @@ const navItems = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'traders', label: 'Traders', icon: TrendingUp },
   { id: 'investment-plans', label: 'Investment Plans', icon: DollarSign },
+  { id: 'signals', label: 'Signals', icon: TrendingUp },
   { id: 'kyc', label: 'KYC Requests', icon: UserCheck, badge: 'pendingKYC' },
   { id: 'transactions', label: 'Transactions', icon: Receipt, badge: 'pendingTransactions' },
   { id: 'notifications', label: 'Notifications', icon: MessageSquare },

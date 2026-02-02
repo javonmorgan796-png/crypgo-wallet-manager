@@ -9,7 +9,8 @@ import {
   Wallet,
   Gift,
   Shield,
-  ShieldCheck
+  ShieldCheck,
+  Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +21,7 @@ const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: TrendingUp, label: 'Investments', href: '/investments' },
   { icon: Users, label: 'Copy Trade', href: '/copy-trade' },
+  { icon: Activity, label: 'Signals', href: '/signals' },
   { icon: History, label: 'Transactions', href: '/transactions' },
   { icon: Gift, label: 'Referral', href: '/referral' },
   { icon: Shield, label: 'KYC Verification', href: '/kyc' },

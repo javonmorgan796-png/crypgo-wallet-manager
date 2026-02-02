@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import Wallet from "./pages/Wallet";
 import Referral from "./pages/Referral";
 import KYC from "./pages/KYC";
+import Signals from "./pages/Signals";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -90,6 +91,11 @@ const App = () => (
             <Route path="/kyc" element={
               <ProtectedRoute>
                 <KYC />
+              </ProtectedRoute>
+            } />
+            <Route path="/signals" element={
+              <ProtectedRoute>
+                <Signals />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={
