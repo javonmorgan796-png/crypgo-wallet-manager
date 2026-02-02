@@ -1,7 +1,6 @@
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { NotificationsDropdown } from '@/components/notifications/NotificationsDropdown';
-import { LiveCryptoPrices } from '@/components/LiveCryptoPrices';
 import { useAuth } from '@/contexts/AuthContext';
 import { BalanceDisplay } from '@/components/ui/BalanceDisplay';
 
@@ -10,9 +9,10 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-6 backdrop-blur-xl">
-      {/* Live Prices Ticker - WebSocket Connected */}
+      {/* Welcome Message */}
       <div className="hidden md:block">
-        <LiveCryptoPrices compact showStatus />
+        <p className="text-sm text-muted-foreground">Welcome back,</p>
+        <p className="font-semibold text-foreground">{user?.name || 'User'}</p>
       </div>
 
       {/* Search - Mobile */}

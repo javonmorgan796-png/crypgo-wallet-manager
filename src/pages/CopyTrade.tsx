@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Users, TrendingUp, Target, Shield, Search, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, TrendingUp, Target, Shield, Search, Loader2, RefreshCw } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserWebSocket } from '@/hooks/useUserWebSocket';
 
 interface Trader {
   _id: string;
@@ -66,12 +67,7 @@ export default function CopyTrade() {
   const { toast } = useToast();
   const { user, refreshUser } = useAuth();
 
-  useEffect(() => {
-    fetchTraders();
-    fetchMyCopies();
-  }, []);
-
-  const fetchTraders = async () => {
+  const fetchTraders = useCallback(async () => {
     setIsLoadingTraders(true);
     try {
       const result = await api.getTraders();
@@ -86,9 +82,9 @@ export default function CopyTrade() {
     } finally {
       setIsLoadingTraders(false);
     }
-  };
+  }, []);
 
-  const fetchMyCopies = async () => {
+  const fetchMyCopies = useCallback(async () => {
     setIsLoadingCopies(true);
     try {
       const result = await api.getMyCopyTrades();
@@ -100,7 +96,24 @@ export default function CopyTrade() {
     } finally {
       setIsLoadingCopies(false);
     }
-  };
+  }, []);
+
+  // WebSocket for real-time trader updates
+  useUserWebSocket({
+    onTradersUpdate: (updatedTraders) => {
+      setTraders(updatedTraders);
+    },
+    onDataRefresh: (type) => {
+      if (type === 'traders') {
+        fetchTraders();
+      }
+    }
+  });
+
+  useEffect(() => {
+    fetchTraders();
+    fetchMyCopies();
+  }, [fetchTraders, fetchMyCopies]);
 
   const filteredTraders = traders.filter(
     (trader) =>
