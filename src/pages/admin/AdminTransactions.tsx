@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
 import api from '@/services/api';
 
 interface Transaction {
@@ -68,13 +69,30 @@ export function AdminTransactions() {
   const fetchTransactions = async () => {
     setIsLoading(true);
     try {
-      const status = activeTab === 'pending' ? 'pending' : undefined;
-      const type = activeTab === 'deposits' ? 'deposit' : activeTab === 'withdrawals' ? 'withdrawal' : undefined;
+      // Build filters based on active tab
+      const filters: { status?: string; type?: string } = {};
       
-      const result = await api.adminGetTransactions({ status, type });
+      if (activeTab === 'pending') {
+        filters.status = 'pending';
+      } else if (activeTab === 'deposits') {
+        filters.type = 'deposit';
+      } else if (activeTab === 'withdrawals') {
+        filters.type = 'withdrawal';
+      }
+      // 'all' tab: no filters
       
-      if (result.success && result.data) {
-        setTransactions(result.data);
+      console.log('Fetching transactions with filters:', filters);
+      const result = await api.adminGetTransactions(Object.keys(filters).length > 0 ? filters : undefined);
+      console.log('Transactions result:', result);
+      
+      if (result.success) {
+        // Handle both array and paginated response formats
+        const txData = Array.isArray(result.data) ? result.data : (result.data as any)?.transactions || result.data || [];
+        setTransactions(Array.isArray(txData) ? txData : []);
+        console.log('Transactions loaded:', txData.length);
+      } else {
+        console.error('Failed to fetch transactions:', result.error);
+        setTransactions([]);
       }
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
@@ -83,10 +101,21 @@ export function AdminTransactions() {
         description: "Failed to fetch transactions",
         variant: "destructive"
       });
+      setTransactions([]);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // WebSocket for real-time updates
+  const handleWebSocketEvent = useCallback((event: any) => {
+    if (event.event === 'new_deposit' || event.event === 'new_withdrawal') {
+      console.log('New transaction event received, refreshing...');
+      fetchTransactions();
+    }
+  }, []);
+  
+  const { isConnected } = useAdminWebSocket(handleWebSocketEvent);
 
   useEffect(() => {
     fetchTransactions();
