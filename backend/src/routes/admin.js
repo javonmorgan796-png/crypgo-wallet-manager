@@ -472,13 +472,15 @@ router.post('/transactions/:id/approve', async (req, res, next) => {
         transaction.user.name,
         transaction.type,
         transaction.amount,
-        'approved'
+        'approved',
+        null
       );
       await sendEmail({
         to: transaction.user.email,
         subject: emailTemplate.subject,
         html: emailTemplate.html
       });
+      console.log(`Approval email sent to ${transaction.user.email}`);
     } catch (emailError) {
       console.error('Email sending failed:', emailError);
     }
@@ -507,6 +509,13 @@ router.post('/transactions/:id/reject', async (req, res, next) => {
       });
     }
     
+    if (transaction.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction has already been processed'
+      });
+    }
+    
     transaction.status = 'failed';
     transaction.processedBy = req.user._id;
     transaction.processedAt = new Date();
@@ -520,6 +529,25 @@ router.post('/transactions/:id/reject', async (req, res, next) => {
       message: `Your ${transaction.type} of $${transaction.amount} was rejected. Reason: ${reason}`,
       type: 'transaction'
     });
+    
+    // Send email notification
+    try {
+      const emailTemplate = emailTemplates.transactionNotification(
+        transaction.user.name,
+        transaction.type,
+        transaction.amount,
+        'rejected',
+        reason
+      );
+      await sendEmail({
+        to: transaction.user.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html
+      });
+      console.log(`Rejection email sent to ${transaction.user.email}`);
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+    }
     
     res.json({
       success: true,
