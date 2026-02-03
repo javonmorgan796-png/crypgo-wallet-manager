@@ -238,7 +238,8 @@ class ApiService {
     if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
     if (filters?.dateTo) params.append('dateTo', filters.dateTo);
 
-    return this.request<any[]>(`/transactions?${params.toString()}`);
+    // User transactions are at /wallet/transactions endpoint
+    return this.request<any[]>(`/wallet/transactions?${params.toString()}`);
   }
 
   // Notifications

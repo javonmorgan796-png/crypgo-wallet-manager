@@ -309,6 +309,7 @@ export function AdminTransactions() {
                             variant="outline" 
                             size="sm"
                             onClick={() => {
+                              console.log('Viewing receipt:', tx.receiptUrl);
                               setSelectedTransaction(tx);
                               setViewingReceipt(true);
                             }}
@@ -383,14 +384,23 @@ export function AdminTransactions() {
           
           <div className="py-4">
             <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
-              <img 
-                src={selectedTransaction?.receiptUrl?.startsWith('http') 
-                  ? selectedTransaction.receiptUrl 
-                  : `https://greenbull-api.onrender.com${selectedTransaction?.receiptUrl}`
-                } 
-                alt="Payment Receipt"
-                className="w-full h-full object-cover"
-              />
+              {selectedTransaction?.receiptUrl && (
+                <img 
+                  src={
+                    selectedTransaction.receiptUrl.startsWith('data:') 
+                      ? selectedTransaction.receiptUrl 
+                      : selectedTransaction.receiptUrl.startsWith('http') 
+                        ? selectedTransaction.receiptUrl 
+                        : `https://greenbull-api.onrender.com${selectedTransaction.receiptUrl}`
+                  } 
+                  alt="Payment Receipt"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    console.error('Failed to load receipt image');
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="gray">Receipt unavailable</text></svg>';
+                  }}
+                />
+              )}
             </div>
             <div className="mt-4 space-y-2">
               <p><strong>Amount:</strong> ${selectedTransaction?.amount.toLocaleString()}</p>

@@ -49,22 +49,30 @@ export default function Transactions() {
       if (dateTo) filters.dateTo = dateTo.toISOString();
 
       const result = await api.getTransactions(filters);
+      console.log('Transactions API result:', result);
       
       if (result.success && result.data) {
+        // Handle both array and paginated response formats
         const txData = Array.isArray(result.data) 
           ? result.data 
-          : (result.data as any).transactions || [];
+          : (result.data as any).transactions || result.data || [];
         
-        setTransactions(txData.map((tx: any) => ({
+        const mappedTransactions = (Array.isArray(txData) ? txData : []).map((tx: any) => ({
           id: tx._id || tx.id,
-          userId: tx.userId,
+          userId: tx.user || tx.userId,
           type: tx.type,
           amount: tx.amount,
           status: tx.status,
-          description: tx.description || `${tx.type} transaction`,
+          description: tx.description || tx.notes || `${tx.type?.charAt(0).toUpperCase() + tx.type?.slice(1)} - ${tx.method || 'crypto'}`,
           createdAt: tx.createdAt,
-          reference: tx.reference,
-        })));
+          reference: tx.txHash || tx.externalRef || tx._id,
+        }));
+        
+        console.log('Mapped transactions:', mappedTransactions.length);
+        setTransactions(mappedTransactions);
+      } else {
+        console.error('Failed to fetch transactions:', result.error);
+        setTransactions([]);
       }
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
