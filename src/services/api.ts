@@ -342,8 +342,12 @@ class ApiService {
     });
   }
 
-  async adminGetTransactions(filters?: any) {
-    const params = new URLSearchParams(filters);
+  async adminGetTransactions(filters?: { type?: string; status?: string; page?: number; limit?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.type && filters.type !== 'undefined') params.append('type', filters.type);
+    if (filters?.status && filters.status !== 'undefined') params.append('status', filters.status);
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
     return this.request<any[]>(`/admin/transactions?${params.toString()}`);
   }
 
