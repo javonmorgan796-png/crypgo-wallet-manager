@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, TrendingUp, Target, Shield, Search, Loader2, RefreshCw } from 'lucide-react';
+import { Users, TrendingUp, Target, Shield, Search, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
+import { FeedbackDialog } from '@/components/ui/success-dialog';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserWebSocket } from '@/hooks/useUserWebSocket';
@@ -36,7 +36,7 @@ interface Trader {
   maxCopyAmount: number;
 }
 
-interface CopyTrade {
+interface CopyTradeType {
   _id: string;
   trader: Trader;
   amount: number;
@@ -52,19 +52,31 @@ interface CopyTrade {
   };
 }
 
+interface FeedbackState {
+  open: boolean;
+  type: 'success' | 'error' | 'warning';
+  title: string;
+  message: string;
+}
+
 export default function CopyTrade() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTrader, setSelectedTrader] = useState<Trader | null>(null);
   const [copyAmount, setCopyAmount] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [traders, setTraders] = useState<Trader[]>([]);
-  const [myCopies, setMyCopies] = useState<CopyTrade[]>([]);
+  const [myCopies, setMyCopies] = useState<CopyTradeType[]>([]);
   const [isLoadingTraders, setIsLoadingTraders] = useState(true);
   const [isLoadingCopies, setIsLoadingCopies] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stopLoss, setStopLoss] = useState([20]);
   const [takeProfit, setTakeProfit] = useState([50]);
-  const { toast } = useToast();
+  const [feedback, setFeedback] = useState<FeedbackState>({
+    open: false,
+    type: 'success',
+    title: '',
+    message: ''
+  });
   const { user, refreshUser } = useAuth();
 
   const fetchTraders = useCallback(async () => {
@@ -121,25 +133,29 @@ export default function CopyTrade() {
       trader.specialization.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const showFeedback = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setFeedback({ open: true, type, title, message });
+  };
+
   const handleCopyTrader = async () => {
-    if (!selectedTrader || !copyAmount) return;
+    if (!selectedTrader || !copyAmount) {
+      showFeedback('error', 'Missing Information', 'Please enter a copy amount.');
+      return;
+    }
 
     const amount = parseFloat(copyAmount);
+    if (isNaN(amount) || amount <= 0) {
+      showFeedback('error', 'Invalid Amount', 'Please enter a valid copy amount.');
+      return;
+    }
+
     if (amount < (selectedTrader.minCopyAmount || 100)) {
-      toast({
-        title: 'Error',
-        description: `Minimum copy amount is $${selectedTrader.minCopyAmount || 100}`,
-        variant: 'destructive',
-      });
+      showFeedback('error', 'Amount Too Low', `Minimum copy amount is $${selectedTrader.minCopyAmount || 100}`);
       return;
     }
 
     if (user && amount > user.balance) {
-      toast({
-        title: 'Insufficient Balance',
-        description: 'You don\'t have enough balance to copy this trader.',
-        variant: 'destructive',
-      });
+      showFeedback('error', 'Insufficient Balance', 'You don\'t have enough balance to copy this trader.');
       return;
     }
 
@@ -152,28 +168,25 @@ export default function CopyTrade() {
       });
 
       if (result.success) {
-        toast({
-          title: 'Copy trade started!',
-          description: `You are now copying ${selectedTrader.name} with $${amount.toLocaleString()}`,
-        });
         setDialogOpen(false);
         setCopyAmount('');
+        const traderName = selectedTrader.name;
         setSelectedTrader(null);
+        setStopLoss([20]);
+        setTakeProfit([50]);
         fetchMyCopies();
         refreshUser();
+        showFeedback(
+          'success',
+          'Copy Trade Started!',
+          `You are now copying ${traderName} with $${amount.toLocaleString()}. Your trades will mirror theirs automatically.`
+        );
       } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to start copy trade',
-          variant: 'destructive',
-        });
+        showFeedback('error', 'Copy Trade Failed', result.error || 'Failed to start copy trade. Please try again.');
       }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to start copy trade. Please try again.',
-        variant: 'destructive',
-      });
+    } catch (error: any) {
+      console.error('Copy trade error:', error);
+      showFeedback('error', 'Connection Error', 'Failed to connect to the server. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -183,28 +196,26 @@ export default function CopyTrade() {
     try {
       const result = await api.stopCopyTrade(copyId);
       if (result.success) {
-        const data = result.data as { returnAmount?: number; profit?: number } | undefined;
-        toast({
-          title: 'Copy trade stopped',
-          description: data?.profit !== undefined
-            ? `Returned $${data.returnAmount?.toFixed(2)} (${data.profit >= 0 ? '+' : ''}$${data.profit?.toFixed(2)} profit)`
-            : 'Funds returned to your balance',
-        });
+        const data = result.data as { returnAmount?: number; profit?: number; profitPercentage?: number } | undefined;
         fetchMyCopies();
         refreshUser();
+        
+        if (data?.profit !== undefined) {
+          const profitText = data.profit >= 0 ? `+$${data.profit.toFixed(2)}` : `-$${Math.abs(data.profit).toFixed(2)}`;
+          showFeedback(
+            data.profit >= 0 ? 'success' : 'warning',
+            'Copy Trade Closed',
+            `$${data.returnAmount?.toFixed(2)} has been returned to your balance. Total ${data.profit >= 0 ? 'profit' : 'loss'}: ${profitText}`
+          );
+        } else {
+          showFeedback('success', 'Copy Trade Stopped', 'Your funds have been returned to your balance.');
+        }
       } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to stop copy trade',
-          variant: 'destructive',
-        });
+        showFeedback('error', 'Failed to Stop', result.error || 'Failed to stop copy trade. Please try again.');
       }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to stop copy trade',
-        variant: 'destructive',
-      });
+    } catch (error: any) {
+      console.error('Stop copy trade error:', error);
+      showFeedback('error', 'Connection Error', 'Failed to connect to the server. Please try again.');
     }
   };
 
@@ -588,9 +599,19 @@ export default function CopyTrade() {
                   )}
                 </Button>
               </div>
-            </div>
+          </div>
           </DialogContent>
         </Dialog>
+
+        {/* Feedback Dialog */}
+        <FeedbackDialog
+          open={feedback.open}
+          onOpenChange={(open) => setFeedback(prev => ({ ...prev, open }))}
+          type={feedback.type}
+          title={feedback.title}
+          message={feedback.message}
+          actionLabel={feedback.type === 'success' ? 'Great!' : 'Got it'}
+        />
       </div>
     </DashboardLayout>
   );
