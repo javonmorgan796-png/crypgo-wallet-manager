@@ -244,7 +244,7 @@ router.get('/users', async (req, res, next) => {
 // Update user
 router.put('/users/:id', async (req, res, next) => {
   try {
-    const { role, isVerified, balance, kycStatus } = req.body;
+    const { role, isVerified, balance, kycStatus, unlockAccount } = req.body;
     
     const updates = {};
     if (role) updates.role = role;
@@ -252,9 +252,15 @@ router.put('/users/:id', async (req, res, next) => {
     if (typeof balance === 'number') updates.balance = balance;
     if (kycStatus) updates.kycStatus = kycStatus;
     
+    // Unlock account if requested
+    if (unlockAccount) {
+      updates.loginAttempts = 0;
+      updates.lockUntil = undefined;
+    }
+    
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      updates,
+      { $set: updates, $unset: unlockAccount ? { lockUntil: 1 } : {} },
       { new: true, runValidators: true }
     ).select('-password -twoFactorSecret');
     
@@ -267,6 +273,35 @@ router.put('/users/:id', async (req, res, next) => {
     
     res.json({
       success: true,
+      data: user
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Unlock user account
+router.post('/users/:id/unlock', async (req, res, next) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { 
+        $set: { loginAttempts: 0 },
+        $unset: { lockUntil: 1 }
+      },
+      { new: true }
+    ).select('-password -twoFactorSecret');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'User account unlocked successfully',
       data: user
     });
   } catch (error) {

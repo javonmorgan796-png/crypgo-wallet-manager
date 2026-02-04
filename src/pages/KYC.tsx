@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -15,7 +14,8 @@ import {
   FileText,
   User,
   CreditCard,
-  Camera
+  Camera,
+  Loader2
 } from 'lucide-react';
 import {
   Select,
@@ -25,6 +25,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import api from '@/services/api';
+import { FeedbackDialog } from '@/components/ui/success-dialog';
 
 type VerificationStatus = 'not_started' | 'pending' | 'verified' | 'rejected';
 
@@ -36,16 +39,39 @@ interface KYCStep {
   status: VerificationStatus;
 }
 
+interface FeedbackState {
+  open: boolean;
+  type: 'success' | 'error' | 'warning';
+  title: string;
+  message: string;
+}
+
 export default function KYC() {
   const { toast } = useToast();
+  const { user, refreshUser } = useAuth();
   const [documentType, setDocumentType] = useState('');
   const [frontDocument, setFrontDocument] = useState<File | null>(null);
   const [backDocument, setBackDocument] = useState<File | null>(null);
   const [selfie, setSelfie] = useState<File | null>(null);
   const [addressProof, setAddressProof] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState>({
+    open: false,
+    type: 'success',
+    title: '',
+    message: ''
+  });
 
-  // Mock verification status
-  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('not_started');
+  // Get verification status from user's KYC status
+  const getVerificationStatus = (): VerificationStatus => {
+    if (!user?.kycStatus || user.kycStatus === 'none') return 'not_started';
+    if (user.kycStatus === 'pending') return 'pending';
+    if (user.kycStatus === 'approved') return 'verified';
+    if (user.kycStatus === 'rejected') return 'rejected';
+    return 'not_started';
+  };
+
+  const verificationStatus = getVerificationStatus();
 
   const kycSteps: KYCStep[] = [
     {
@@ -81,6 +107,10 @@ export default function KYC() {
   const completedSteps = kycSteps.filter(s => s.status === 'verified').length;
   const progress = (completedSteps / kycSteps.length) * 100;
 
+  const showFeedback = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setFeedback({ open: true, type, title, message });
+  };
+
   const getStatusBadge = (status: VerificationStatus) => {
     switch (status) {
       case 'verified':
@@ -97,10 +127,10 @@ export default function KYC() {
   const handleFileChange = (setter: (file: File | null) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "File too large",
-          description: "Please upload a file smaller than 5MB",
+          description: "Please upload a file smaller than 10MB",
           variant: "destructive",
         });
         return;
@@ -113,35 +143,86 @@ export default function KYC() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!documentType) {
-      toast({
-        title: "Document type required",
-        description: "Please select a document type",
-        variant: "destructive",
-      });
+      showFeedback('error', 'Document Type Required', 'Please select a document type before submitting.');
       return;
     }
 
     if (!frontDocument) {
-      toast({
-        title: "Document required",
-        description: "Please upload the front of your ID document",
-        variant: "destructive",
-      });
+      showFeedback('error', 'Document Required', 'Please upload the front of your ID document.');
       return;
     }
 
-    setVerificationStatus('pending');
-    toast({
-      title: "KYC Submitted",
-      description: "Your documents have been submitted for verification. This usually takes 24-48 hours.",
-    });
+    setIsSubmitting(true);
+
+    try {
+      // Create FormData with the files
+      const formData = new FormData();
+      formData.append('documentType', documentType);
+      
+      if (frontDocument) {
+        formData.append('id_front', frontDocument);
+      }
+      if (backDocument) {
+        formData.append('id_back', backDocument);
+      }
+      if (selfie) {
+        formData.append('selfie', selfie);
+      }
+      if (addressProof) {
+        formData.append('proof_of_address', addressProof);
+      }
+
+      const result = await api.submitKYC(formData);
+
+      if (result.success) {
+        showFeedback(
+          'success',
+          'KYC Submitted Successfully!',
+          'Your documents have been submitted for verification. This usually takes 24-48 hours. We\'ll notify you once the review is complete.'
+        );
+        
+        // Refresh user data to get updated KYC status
+        await refreshUser();
+        
+        // Clear form
+        setDocumentType('');
+        setFrontDocument(null);
+        setBackDocument(null);
+        setSelfie(null);
+        setAddressProof(null);
+      } else {
+        showFeedback(
+          'error',
+          'Submission Failed',
+          result.message || 'Failed to submit KYC documents. Please try again.'
+        );
+      }
+    } catch (error: any) {
+      console.error('KYC submission error:', error);
+      showFeedback(
+        'error',
+        'Submission Failed',
+        error.message || 'An error occurred while submitting your documents. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Feedback Dialog */}
+        <FeedbackDialog
+          open={feedback.open}
+          onOpenChange={(open) => setFeedback(prev => ({ ...prev, open }))}
+          type={feedback.type}
+          title={feedback.title}
+          message={feedback.message}
+        />
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -192,19 +273,36 @@ export default function KYC() {
           ))}
         </div>
 
+        {/* Rejection Notice */}
+        {verificationStatus === 'rejected' && (
+          <Card className="bg-destructive/10 border-destructive/30">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <AlertCircle className="h-6 w-6 text-destructive flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-foreground">Verification Rejected</h3>
+                  <p className="text-muted-foreground mt-1">
+                    Your previous submission was rejected. Please submit new documents below.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Upload Form */}
-        {verificationStatus !== 'verified' && (
+        {verificationStatus !== 'verified' && verificationStatus !== 'pending' && (
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle>Upload Documents</CardTitle>
               <CardDescription>
-                Please upload clear photos of your documents. All files must be under 5MB.
+                Please upload clear photos of your documents. All files must be under 10MB.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Document Type */}
               <div className="space-y-2">
-                <Label>Document Type</Label>
+                <Label>Document Type *</Label>
                 <Select value={documentType} onValueChange={setDocumentType}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="Select document type" />
@@ -221,7 +319,7 @@ export default function KYC() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Front of ID */}
                 <div className="space-y-2">
-                  <Label>Front of ID Document</Label>
+                  <Label>Front of ID Document *</Label>
                   <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                     <input
                       type="file"
@@ -332,12 +430,12 @@ export default function KYC() {
               <Button 
                 className="w-full bg-primary hover:bg-primary/90" 
                 onClick={handleSubmit}
-                disabled={verificationStatus === 'pending'}
+                disabled={isSubmitting}
               >
-                {verificationStatus === 'pending' ? (
+                {isSubmitting ? (
                   <>
-                    <Clock className="h-4 w-4 mr-2" />
-                    Verification in Progress
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Submitting...
                   </>
                 ) : (
                   <>
@@ -346,12 +444,19 @@ export default function KYC() {
                   </>
                 )}
               </Button>
+            </CardContent>
+          </Card>
+        )}
 
-              {verificationStatus === 'pending' && (
-                <p className="text-sm text-center text-muted-foreground">
-                  Your documents are being reviewed. This usually takes 24-48 hours.
-                </p>
-              )}
+        {/* Pending State */}
+        {verificationStatus === 'pending' && (
+          <Card className="bg-yellow-500/10 border-yellow-500/30">
+            <CardContent className="p-8 text-center">
+              <Clock className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-foreground mb-2">Verification In Progress</h3>
+              <p className="text-muted-foreground">
+                Your documents are being reviewed. This usually takes 24-48 hours. We'll notify you once the review is complete.
+              </p>
             </CardContent>
           </Card>
         )}

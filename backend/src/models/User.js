@@ -124,13 +124,22 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Check if account is locked
+// Check if account is locked (admins are never locked)
 userSchema.methods.isLocked = function() {
+  // Admin accounts bypass lock mechanism
+  if (this.role === 'admin') {
+    return false;
+  }
   return this.lockUntil && this.lockUntil > Date.now();
 };
 
-// Increment login attempts
+// Increment login attempts (only for non-admin users)
 userSchema.methods.incrementLoginAttempts = async function() {
+  // Admin accounts don't get locked
+  if (this.role === 'admin') {
+    return;
+  }
+  
   if (this.lockUntil && this.lockUntil < Date.now()) {
     await this.updateOne({
       $set: { loginAttempts: 1 },
@@ -141,8 +150,9 @@ userSchema.methods.incrementLoginAttempts = async function() {
   
   const updates = { $inc: { loginAttempts: 1 } };
   
-  if (this.loginAttempts + 1 >= 5) {
-    updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 }; // Lock for 2 hours
+  // Lock after 10 failed attempts (increased from 5) for 30 minutes (reduced from 2 hours)
+  if (this.loginAttempts + 1 >= 10) {
+    updates.$set = { lockUntil: Date.now() + 30 * 60 * 1000 }; // Lock for 30 minutes
   }
   
   await this.updateOne(updates);

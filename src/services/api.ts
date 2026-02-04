@@ -326,6 +326,12 @@ class ApiService {
     });
   }
 
+  async adminUnlockUser(userId: string) {
+    return this.request(`/admin/users/${userId}/unlock`, {
+      method: 'POST',
+    });
+  }
+
   async adminGetKYCRequests(status?: string) {
     return this.request<any[]>(`/admin/kyc?status=${status || 'pending'}`);
   }

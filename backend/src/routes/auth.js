@@ -85,9 +85,10 @@ router.post('/login', async (req, res, next) => {
     
     // Check if account is locked
     if (user.isLocked()) {
+      const lockTimeRemaining = Math.ceil((user.lockUntil - Date.now()) / 60000);
       return res.status(423).json({
         success: false,
-        message: 'Account is temporarily locked. Please try again later.'
+        message: `Account is temporarily locked due to too many failed login attempts. Please try again in ${lockTimeRemaining} minutes.`
       });
     }
     
