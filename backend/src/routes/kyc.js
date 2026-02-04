@@ -54,6 +54,13 @@ router.get('/status', protect, async (req, res) => {
 router.post('/submit', protect, kycUpload, async (req, res, next) => {
   try {
     const files = req.files;
+    const documentType = req.body.documentType || 'national_id';
+    
+    console.log('KYC submission received:', {
+      userId: req.user._id,
+      documentType,
+      files: files ? Object.keys(files) : 'none'
+    });
     
     if (!files || Object.keys(files).length === 0) {
       return res.status(400).json({
@@ -76,11 +83,19 @@ router.post('/submit', protect, kycUpload, async (req, res, next) => {
       }
     }
     
+    console.log('Documents to save:', documents);
+    
     // Update user KYC status
     req.user.kycDocuments = documents;
     req.user.kycStatus = 'pending';
     req.user.kycRejectionReason = undefined;
     await req.user.save();
+    
+    console.log('User KYC updated:', {
+      userId: req.user._id,
+      kycStatus: req.user.kycStatus,
+      documentsCount: documents.length
+    });
     
     // Create notification
     await Notification.create({
@@ -99,6 +114,7 @@ router.post('/submit', protect, kycUpload, async (req, res, next) => {
       }
     });
   } catch (error) {
+    console.error('KYC submission error:', error);
     next(error);
   }
 });

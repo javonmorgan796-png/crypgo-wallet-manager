@@ -26,10 +26,20 @@ import {
   FileText,
   Download,
   Clock,
-  Loader2
+  Loader2,
+  ImageIcon,
+  AlertCircle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/services/api';
+
+const BACKEND_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
+
+interface KYCDocument {
+  type: string;
+  url: string;
+  uploadedAt: string;
+}
 
 interface KYCRequest {
   id: string;
@@ -37,10 +47,7 @@ interface KYCRequest {
   userId: string;
   userName: string;
   email: string;
-  documentType: string;
-  frontImage: string;
-  backImage: string;
-  selfie: string;
+  kycDocuments: KYCDocument[];
   submittedAt: string;
   status: string;
 }
@@ -64,37 +71,40 @@ export function AdminKYC() {
     try {
       const result = await api.adminGetKYCRequests('pending');
       if (result.success && result.data) {
+        console.log('KYC Requests raw data:', result.data);
         setRequests(result.data.map((r: any) => ({
           id: r._id || r.id,
-          userId: r.userId,
-          userName: r.userName || r.user?.name || 'Unknown',
-          email: r.email || r.user?.email || '',
-          documentType: r.documentType,
-          frontImage: r.frontImage,
-          backImage: r.backImage,
-          selfie: r.selfie,
-          submittedAt: r.submittedAt || r.createdAt,
-          status: r.status,
+          userId: r._id || r.id, // The user ID is the document ID
+          userName: r.name || 'Unknown',
+          email: r.email || '',
+          kycDocuments: r.kycDocuments || [],
+          submittedAt: r.kycDocuments?.[0]?.uploadedAt || r.createdAt,
+          status: r.kycStatus || 'pending',
         })));
       }
     } catch (error) {
       console.error('Failed to fetch KYC requests:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load KYC requests",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (userId: string) => {
     setIsProcessing(true);
     try {
-      const request = requests.find(r => r.id === id);
-      const result = await api.adminApproveKYC(request?.userId || id);
+      const result = await api.adminApproveKYC(userId);
       if (result.success) {
-        setRequests(requests.filter(r => r.id !== id));
+        setRequests(requests.filter(r => r.userId !== userId));
         toast({
           title: "KYC Approved",
           description: "User has been notified of their verification approval",
         });
+        setViewingDocuments(false);
       } else {
         throw new Error(result.error);
       }
@@ -114,9 +124,9 @@ export function AdminKYC() {
     
     setIsProcessing(true);
     try {
-      const result = await api.adminRejectKYC(selectedRequest.userId || selectedRequest.id, rejectReason);
+      const result = await api.adminRejectKYC(selectedRequest.userId, rejectReason);
       if (result.success) {
-        setRequests(requests.filter(r => r.id !== selectedRequest.id));
+        setRequests(requests.filter(r => r.userId !== selectedRequest.userId));
         toast({
           title: "KYC Rejected",
           description: "User has been notified with the rejection reason",
@@ -138,13 +148,25 @@ export function AdminKYC() {
     }
   };
 
+  const getDocumentUrl = (url: string) => {
+    if (!url) return '/placeholder.svg';
+    if (url.startsWith('data:')) return url;
+    if (url.startsWith('http')) return url;
+    return `${BACKEND_URL}${url}`;
+  };
+
   const getDocumentTypeName = (type: string) => {
     switch (type) {
-      case 'passport': return 'Passport';
-      case 'drivers_license': return "Driver's License";
-      case 'national_id': return 'National ID';
+      case 'id_front': return 'ID Front';
+      case 'id_back': return 'ID Back';
+      case 'selfie': return 'Selfie';
+      case 'proof_of_address': return 'Proof of Address';
       default: return type;
     }
+  };
+
+  const getDocumentCount = (documents: KYCDocument[]) => {
+    return documents?.length || 0;
   };
 
   if (isLoading) {
@@ -187,7 +209,7 @@ export function AdminKYC() {
               <TableHeader>
                 <TableRow>
                   <TableHead>User</TableHead>
-                  <TableHead>Document Type</TableHead>
+                  <TableHead>Documents</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -204,10 +226,15 @@ export function AdminKYC() {
                     <TableCell>
                       <Badge variant="outline">
                         <FileText className="h-3 w-3 mr-1" />
-                        {getDocumentTypeName(request.documentType)}
+                        {getDocumentCount(request.kycDocuments)} document(s)
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(request.submittedAt).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      {request.submittedAt 
+                        ? new Date(request.submittedAt).toLocaleDateString()
+                        : 'N/A'
+                      }
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button 
@@ -225,7 +252,7 @@ export function AdminKYC() {
                           variant="default" 
                           size="sm"
                           className="bg-green-500 hover:bg-green-600"
-                          onClick={() => handleApprove(request.id)}
+                          onClick={() => handleApprove(request.userId)}
                           disabled={isProcessing}
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
@@ -255,60 +282,77 @@ export function AdminKYC() {
 
       {/* View Documents Dialog */}
       <Dialog open={viewingDocuments} onOpenChange={setViewingDocuments}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>KYC Documents - {selectedRequest?.userName}</DialogTitle>
             <DialogDescription>
-              Review the submitted identity documents
+              Review the submitted identity documents ({selectedRequest?.email})
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid grid-cols-3 gap-4 py-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Document Front</p>
-              <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
-                <img 
-                  src={selectedRequest?.frontImage || '/placeholder.svg'} 
-                  alt="Document Front"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <Button variant="outline" size="sm" className="w-full">
-                <Download className="h-4 w-4 mr-1" />
-                Download
-              </Button>
+          {selectedRequest?.kycDocuments && selectedRequest.kycDocuments.length > 0 ? (
+            <div className="grid grid-cols-2 gap-4 py-4">
+              {selectedRequest.kycDocuments.map((doc, index) => (
+                <div key={index} className="space-y-2">
+                  <p className="text-sm font-medium">{getDocumentTypeName(doc.type)}</p>
+                  <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden relative">
+                    <img 
+                      src={getDocumentUrl(doc.url)}
+                      alt={getDocumentTypeName(doc.type)}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent && !parent.querySelector('.error-state')) {
+                          const errorDiv = document.createElement('div');
+                          errorDiv.className = 'error-state absolute inset-0 flex flex-col items-center justify-center text-muted-foreground';
+                          errorDiv.innerHTML = '<span class="text-sm">Unable to load image</span>';
+                          parent.appendChild(errorDiv);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => window.open(getDocumentUrl(doc.url), '_blank')}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      View Full
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = getDocumentUrl(doc.url);
+                        link.download = `${selectedRequest.userName}-${doc.type}`;
+                        link.click();
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Uploaded: {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'N/A'}
+                  </p>
+                </div>
+              ))}
             </div>
-            
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Document Back</p>
-              <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
-                <img 
-                  src={selectedRequest?.backImage || '/placeholder.svg'} 
-                  alt="Document Back"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <Button variant="outline" size="sm" className="w-full">
-                <Download className="h-4 w-4 mr-1" />
-                Download
-              </Button>
+          ) : (
+            <div className="py-8 text-center">
+              <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No documents found for this user</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                The user may have submitted their KYC but the documents were not uploaded properly.
+              </p>
             </div>
-            
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Selfie with Document</p>
-              <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
-                <img 
-                  src={selectedRequest?.selfie || '/placeholder.svg'} 
-                  alt="Selfie"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <Button variant="outline" size="sm" className="w-full">
-                <Download className="h-4 w-4 mr-1" />
-                Download
-              </Button>
-            </div>
-          </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewingDocuments(false)}>
@@ -317,12 +361,13 @@ export function AdminKYC() {
             <Button 
               className="bg-green-500 hover:bg-green-600"
               onClick={() => {
-                handleApprove(selectedRequest!.id);
-                setViewingDocuments(false);
+                if (selectedRequest) {
+                  handleApprove(selectedRequest.userId);
+                }
               }}
               disabled={isProcessing}
             >
-              <CheckCircle className="h-4 w-4 mr-1" />
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
               Approve
             </Button>
             <Button 
