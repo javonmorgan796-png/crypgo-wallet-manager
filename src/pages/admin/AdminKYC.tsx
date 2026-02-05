@@ -35,6 +35,63 @@ import api from '@/services/api';
 
 const BACKEND_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
 
+// Helper component for KYC document images with proper error handling
+const KYCDocumentImage = ({ url, alt }: { url: string; alt: string }) => {
+  const [imgSrc, setImgSrc] = useState<string>('');
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!url) {
+      setHasError(true);
+      setIsLoading(false);
+      return;
+    }
+
+    // Handle different URL formats
+    let finalUrl = url;
+    if (url.startsWith('data:')) {
+      finalUrl = url;
+    } else if (url.startsWith('http')) {
+      finalUrl = url;
+    } else {
+      // Relative path - prepend backend URL
+      finalUrl = `${BACKEND_URL}${url}`;
+    }
+
+    setImgSrc(finalUrl);
+    setIsLoading(false);
+  }, [url]);
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-muted">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (hasError || !imgSrc) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground">
+        <ImageIcon className="h-8 w-8 mb-2" />
+        <span className="text-sm">Unable to load image</span>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={imgSrc}
+      alt={alt}
+      className="w-full h-full object-cover"
+      crossOrigin="anonymous"
+      onError={() => setHasError(true)}
+      onLoad={() => setIsLoading(false)}
+    />
+  );
+};
+
 interface KYCDocument {
   type: string;
   url: string;
@@ -296,22 +353,7 @@ export function AdminKYC() {
                 <div key={index} className="space-y-2">
                   <p className="text-sm font-medium">{getDocumentTypeName(doc.type)}</p>
                   <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden relative">
-                    <img 
-                      src={getDocumentUrl(doc.url)}
-                      alt={getDocumentTypeName(doc.type)}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const parent = target.parentElement;
-                        if (parent && !parent.querySelector('.error-state')) {
-                          const errorDiv = document.createElement('div');
-                          errorDiv.className = 'error-state absolute inset-0 flex flex-col items-center justify-center text-muted-foreground';
-                          errorDiv.innerHTML = '<span class="text-sm">Unable to load image</span>';
-                          parent.appendChild(errorDiv);
-                        }
-                      }}
-                    />
+                    <KYCDocumentImage url={doc.url} alt={getDocumentTypeName(doc.type)} />
                   </div>
                   <div className="flex gap-2">
                     <Button 

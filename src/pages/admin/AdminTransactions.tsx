@@ -37,9 +37,67 @@ import { useToast } from '@/hooks/use-toast';
 import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
 import api from '@/services/api';
 
+const API_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
+
+// Helper component for receipt images with proper error handling
+const ReceiptImage = ({ url }: { url: string }) => {
+  const [imgSrc, setImgSrc] = useState<string>('');
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!url) {
+      setHasError(true);
+      setIsLoading(false);
+      return;
+    }
+
+    // Handle different URL formats
+    let finalUrl = url;
+    if (url.startsWith('data:')) {
+      finalUrl = url;
+    } else if (url.startsWith('http')) {
+      finalUrl = url;
+    } else {
+      // Relative path - prepend API URL
+      finalUrl = `${API_URL}${url}`;
+    }
+
+    setImgSrc(finalUrl);
+    setIsLoading(false);
+  }, [url]);
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-muted">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (hasError || !imgSrc) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground">
+        <Eye className="h-8 w-8 mb-2" />
+        <span className="text-sm">Receipt unavailable</span>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={imgSrc}
+      alt="Payment Receipt"
+      className="w-full h-full object-contain"
+      onError={() => setHasError(true)}
+      onLoad={() => setIsLoading(false)}
+    />
+  );
+};
+
 interface Transaction {
   _id: string;
-  type: 'deposit' | 'withdrawal';
+  type: 'deposit' | 'withdrawal' | 'copy-trade' | 'copy-trade-close';
   user: {
     _id: string;
     name: string;
@@ -385,21 +443,7 @@ export function AdminTransactions() {
           <div className="py-4">
             <div className="aspect-[4/3] bg-muted rounded-lg overflow-hidden">
               {selectedTransaction?.receiptUrl && (
-                <img 
-                  src={
-                    selectedTransaction.receiptUrl.startsWith('data:') 
-                      ? selectedTransaction.receiptUrl 
-                      : selectedTransaction.receiptUrl.startsWith('http') 
-                        ? selectedTransaction.receiptUrl 
-                        : `https://greenbull-api.onrender.com${selectedTransaction.receiptUrl}`
-                  } 
-                  alt="Payment Receipt"
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    console.error('Failed to load receipt image');
-                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="gray">Receipt unavailable</text></svg>';
-                  }}
-                />
+                <ReceiptImage url={selectedTransaction.receiptUrl} />
               )}
             </div>
             <div className="mt-4 space-y-2">
