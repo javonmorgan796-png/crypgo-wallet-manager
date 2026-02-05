@@ -52,7 +52,7 @@ class ApiService {
       return { success: true, data: responseData };
     } catch (error) {
       console.error('API Error:', error);
-      return { success: false, error: 'Network error. Please try again.' };
+      return { success: false, error: 'Unable to connect to server. Please check your internet connection and try again.' };
     }
   }
 
