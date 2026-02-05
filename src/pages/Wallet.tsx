@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin, Upload, FileImage, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { ArrowDownLeft, ArrowUpRight, Wallet, Copy, Check, Bitcoin, Upload, FileImage, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserData } from '@/hooks/useUserData';
 import api from '@/services/api';
+import { FeedbackDialog } from '@/components/ui/success-dialog';
+import { toast } from 'sonner';
 
 const cryptoOptions = [
   { value: 'btc', label: 'Bitcoin (BTC)', address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' },
@@ -32,9 +33,31 @@ export default function WalletPage() {
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [balanceVisible, setBalanceVisible] = useState(true);
+  const [feedback, setFeedback] = useState<{
+    open: boolean;
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+  }>({
+    open: false,
+    type: 'success',
+    title: '',
+    message: ''
+  });
 
   const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto);
   const userBalance = user?.balance ?? balance;
+
+  // Auto-fetch balance on mount
+  useEffect(() => {
+    refreshData();
+    refreshUser();
+  }, []);
+
+  const showFeedback = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setFeedback({ open: true, type, title, message });
+  };
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -78,7 +101,11 @@ export default function WalletPage() {
       console.log('Deposit result:', result);
       
       if (result.success) {
-        toast.success(`Deposit of $${depositAmount} submitted! We'll verify your payment shortly.`);
+        showFeedback(
+          'success',
+          'Deposit Request Submitted!',
+          `Your deposit of $${parseFloat(depositAmount).toLocaleString()} has been submitted successfully. We'll verify your payment and credit your account within 10-30 minutes.`
+        );
         setDepositAmount('');
         setReceiptFile(null);
         setReceiptPreview(null);
@@ -90,11 +117,19 @@ export default function WalletPage() {
         await refreshUser();
         await refreshData();
       } else {
-        toast.error(result.message || result.error || 'Failed to submit deposit request');
+        showFeedback(
+          'error',
+          'Deposit Failed',
+          result.message || result.error || 'Failed to submit deposit request. Please try again.'
+        );
       }
     } catch (error: any) {
       console.error('Deposit error:', error);
-      toast.error(error.message || 'Failed to submit deposit. Please try again.');
+      showFeedback(
+        'error',
+        'Deposit Error',
+        error.message || 'Failed to submit deposit. Please check your connection and try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -119,18 +154,30 @@ export default function WalletPage() {
       const result = await api.withdraw(parseFloat(withdrawAmount), withdrawAddress, withdrawCrypto);
       
       if (result.success) {
-        toast.success(`Withdrawal request of $${withdrawAmount} in ${withdrawCrypto.toUpperCase()} submitted!`);
+        showFeedback(
+          'success',
+          'Withdrawal Request Submitted!',
+          `Your withdrawal of $${parseFloat(withdrawAmount).toLocaleString()} to your ${withdrawCrypto.toUpperCase()} wallet has been submitted. Processing time: 24 hours.`
+        );
         setWithdrawAmount('');
         setWithdrawAddress('');
         // Refresh user data
         await refreshUser();
         await refreshData();
       } else {
-        toast.error(result.error || 'Failed to submit withdrawal request');
+        showFeedback(
+          'error',
+          'Withdrawal Failed',
+          result.error || 'Failed to submit withdrawal request. Please try again.'
+        );
       }
     } catch (error) {
       console.error('Withdrawal error:', error);
-      toast.error('Failed to submit withdrawal. Please try again.');
+      showFeedback(
+        'error',
+        'Withdrawal Error',
+        'Failed to submit withdrawal. Please check your connection and try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -138,6 +185,16 @@ export default function WalletPage() {
 
   return (
     <DashboardLayout>
+      {/* Feedback Dialog */}
+      <FeedbackDialog
+        open={feedback.open}
+        onOpenChange={(open) => setFeedback(prev => ({ ...prev, open }))}
+        type={feedback.type}
+        title={feedback.title}
+        message={feedback.message}
+        actionLabel="OK"
+      />
+
       <div className="space-y-6">
         {/* Page Header */}
         <div>
@@ -151,16 +208,35 @@ export default function WalletPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm">Available Balance</p>
-                {isDataLoading ? (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    <span className="text-muted-foreground">Loading...</span>
-                  </div>
-                ) : (
-                  <p className="text-4xl font-bold text-foreground font-display">
-                    ${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                )}
+                <div className="flex items-center gap-3 mt-1">
+                  {isDataLoading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <span className="text-muted-foreground">Loading...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-4xl font-bold text-foreground font-display">
+                        {balanceVisible 
+                          ? `$${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : '******'
+                        }
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setBalanceVisible(!balanceVisible)}
+                        className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200"
+                        aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+                      >
+                        {balanceVisible ? (
+                          <Eye className="h-5 w-5" />
+                        ) : (
+                          <EyeOff className="h-5 w-5" />
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
                 <Wallet className="h-8 w-8 text-primary" />
@@ -378,7 +454,10 @@ export default function WalletPage() {
                     className="bg-secondary border-border"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Available: ${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    Available: {balanceVisible 
+                      ? `$${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : '******'
+                    }
                   </p>
                 </div>
 
