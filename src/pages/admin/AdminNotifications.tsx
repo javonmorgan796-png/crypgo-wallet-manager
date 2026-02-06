@@ -12,15 +12,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { 
   Send,
   Bell,
   Mail,
+  MailX,
+  MailCheck,
   MessageSquare,
   Users,
   User,
   Clock,
   CheckCircle,
+  AlertCircle,
   Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -40,6 +49,9 @@ interface NotificationHistory {
   recipients: string;
   sentAt: string;
   status: string;
+  emailsSent?: number;
+  emailErrors?: { email: string; error: string }[];
+  emailEnabled?: boolean;
 }
 
 export function AdminNotifications() {
@@ -108,6 +120,10 @@ export function AdminNotifications() {
       });
 
       if (result.success) {
+        const responseData = result.data || { notificationsSent: 0, emailsSent: 0 };
+        const emailsSentCount = responseData.emailsSent || 0;
+        const emailErrorsList = responseData.emailErrors || [];
+        
         const newNotification: NotificationHistory = {
           id: Date.now().toString(),
           type: notificationType,
@@ -116,16 +132,37 @@ export function AdminNotifications() {
           recipients: notificationType === 'broadcast' ? 'all' : selectedUser,
           sentAt: new Date().toISOString(),
           status: 'sent',
+          emailEnabled: sendEmail,
+          emailsSent: emailsSentCount,
+          emailErrors: emailErrorsList,
         };
 
         setHistory([newNotification, ...history]);
         
-        toast({
-          title: "Notification Sent",
-          description: notificationType === 'broadcast' 
-            ? `Notification sent to all users${sendEmail ? ' (with email)' : ''}`
-            : `Notification sent to user${sendEmail ? ' (with email)' : ''}`,
-        });
+        // Show detailed toast with email status
+        if (sendEmail) {
+          if (emailErrorsList.length > 0) {
+            toast({
+              title: "Notification Sent (Some emails failed)",
+              description: `${emailsSentCount} email(s) sent, ${emailErrorsList.length} failed`,
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Notification Sent",
+              description: notificationType === 'broadcast' 
+                ? `Sent to all users. ${emailsSentCount} email(s) delivered.`
+                : `Sent to user. Email delivered successfully.`,
+            });
+          }
+        } else {
+          toast({
+            title: "Notification Sent",
+            description: notificationType === 'broadcast' 
+              ? "In-app notification sent to all users"
+              : "In-app notification sent to user",
+          });
+        }
 
         // Reset form
         setTitle('');
@@ -329,10 +366,53 @@ export function AdminNotifications() {
                           : notification.recipients
                         }
                       </span>
-                      <span className="flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3 text-green-500" />
-                        {new Date(notification.sentAt).toLocaleString()}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Email Status Indicator */}
+                        {notification.emailEnabled && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1">
+                                  {notification.emailErrors && notification.emailErrors.length > 0 ? (
+                                    <span className="flex items-center gap-1 text-amber-500">
+                                      <AlertCircle className="h-3 w-3" />
+                                      <span>{notification.emailsSent || 0}/{(notification.emailsSent || 0) + notification.emailErrors.length}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-green-500">
+                                      <MailCheck className="h-3 w-3" />
+                                      <span>{notification.emailsSent || 0}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {notification.emailErrors && notification.emailErrors.length > 0 ? (
+                                  <div className="text-xs">
+                                    <p className="font-medium mb-1">Email Delivery Status:</p>
+                                    <p className="text-green-400">{notification.emailsSent || 0} sent successfully</p>
+                                    <p className="text-red-400">{notification.emailErrors.length} failed</p>
+                                    {notification.emailErrors.slice(0, 3).map((err, i) => (
+                                      <p key={i} className="text-muted-foreground mt-1 truncate max-w-[200px]">
+                                        {err.email}: {err.error}
+                                      </p>
+                                    ))}
+                                    {notification.emailErrors.length > 3 && (
+                                      <p className="text-muted-foreground">+{notification.emailErrors.length - 3} more errors</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs">All {notification.emailsSent} email(s) delivered</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3 text-green-500" />
+                          {new Date(notification.sentAt).toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}

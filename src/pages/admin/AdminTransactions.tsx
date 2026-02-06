@@ -44,6 +44,7 @@ const ReceiptImage = ({ url }: { url: string }) => {
   const [imgSrc, setImgSrc] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!url) {
@@ -52,46 +53,88 @@ const ReceiptImage = ({ url }: { url: string }) => {
       return;
     }
 
+    setHasError(false);
+    setIsLoading(true);
+
     // Handle different URL formats
     let finalUrl = url;
+    
+    // Check if it's base64 data
     if (url.startsWith('data:')) {
       finalUrl = url;
-    } else if (url.startsWith('http')) {
+    } 
+    // Check if it's already a full URL
+    else if (url.startsWith('http://') || url.startsWith('https://')) {
       finalUrl = url;
-    } else {
-      // Relative path - prepend API URL
+    }
+    // Handle relative paths - prepend API URL
+    else if (url.startsWith('/')) {
       finalUrl = `${API_URL}${url}`;
     }
+    // Handle paths without leading slash
+    else {
+      finalUrl = `${API_URL}/${url}`;
+    }
 
+    console.log('Loading receipt image:', { original: url, final: finalUrl });
     setImgSrc(finalUrl);
-    setIsLoading(false);
-  }, [url]);
+  }, [url, retryCount]);
 
-  if (isLoading) {
+  const handleRetry = () => {
+    if (retryCount < 2) {
+      setRetryCount(prev => prev + 1);
+    }
+  };
+
+  if (!url) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-muted">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground p-4">
+        <Eye className="h-8 w-8 mb-2 opacity-50" />
+        <span className="text-sm">No receipt uploaded</span>
       </div>
     );
   }
 
-  if (hasError || !imgSrc) {
+  if (hasError) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground">
-        <Eye className="h-8 w-8 mb-2" />
-        <span className="text-sm">Receipt unavailable</span>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground p-4">
+        <Eye className="h-8 w-8 mb-2 opacity-50" />
+        <span className="text-sm mb-2">Unable to load image</span>
+        {retryCount < 2 && (
+          <Button variant="outline" size="sm" onClick={handleRetry}>
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Retry
+          </Button>
+        )}
+        <p className="text-xs mt-2 opacity-60 text-center break-all max-w-full">
+          {url.length > 50 ? `${url.substring(0, 50)}...` : url}
+        </p>
       </div>
     );
   }
 
   return (
-    <img 
-      src={imgSrc}
-      alt="Payment Receipt"
-      className="w-full h-full object-contain"
-      onError={() => setHasError(true)}
-      onLoad={() => setIsLoading(false)}
-    />
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      <img 
+        src={imgSrc}
+        alt="Payment Receipt"
+        className={`w-full h-full object-contain transition-opacity ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+        onError={(e) => {
+          console.error('Image load error for:', imgSrc);
+          setHasError(true);
+          setIsLoading(false);
+        }}
+        onLoad={() => {
+          console.log('Image loaded successfully:', imgSrc);
+          setIsLoading(false);
+        }}
+      />
+    </div>
   );
 };
 
