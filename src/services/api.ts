@@ -371,7 +371,7 @@ class ApiService {
     });
   }
 
-  async adminSendNotification(data: { userId?: string; title: string; message: string; type: string }) {
+  async adminSendNotification(data: { userId?: string; title: string; message: string; type: string; sendEmail?: boolean }) {
     return this.request('/admin/notifications/send', {
       method: 'POST',
       body: JSON.stringify(data),

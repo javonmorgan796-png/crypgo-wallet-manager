@@ -596,31 +596,137 @@ router.post('/transactions/:id/reject', async (req, res, next) => {
 // Send notification to user(s)
 router.post('/notifications/send', async (req, res, next) => {
   try {
-    const { userId, title, message, type = 'info' } = req.body;
+    const { userId, title, message, type = 'info', sendEmail: shouldSendEmail = false } = req.body;
+    
+    let notificationsSent = 0;
+    let emailsSent = 0;
+    let emailErrors = [];
     
     if (userId) {
       // Send to specific user
+      const user = await User.findById(userId).select('name email');
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+      
       await Notification.create({
         user: userId,
         title,
         message,
-        type
+        type,
+        emailSent: shouldSendEmail
       });
+      notificationsSent = 1;
+      
+      // Send email if requested
+      if (shouldSendEmail && user.email) {
+        try {
+          await sendEmail({
+            to: user.email,
+            subject: title,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+                <div style="background-color: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                  <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #22c55e; margin: 0;">GreenBull Trading</h1>
+                  </div>
+                  <h2 style="color: #111827; margin-bottom: 16px;">${title}</h2>
+                  <p style="color: #374151; font-size: 16px; line-height: 1.6;">${message}</p>
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${process.env.FRONTEND_URL || 'https://grebull.lovable.app'}/dashboard" 
+                       style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+                              color: white; 
+                              padding: 14px 30px; 
+                              text-decoration: none; 
+                              border-radius: 8px; 
+                              font-weight: bold;
+                              display: inline-block;">
+                      Go to Dashboard
+                    </a>
+                  </div>
+                  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                  <p style="color: #9ca3af; font-size: 12px; text-align: center;">© ${new Date().getFullYear()} GreenBull Trading. All rights reserved.</p>
+                </div>
+              </div>
+            `
+          });
+          emailsSent = 1;
+          console.log(`Notification email sent to ${user.email}`);
+        } catch (emailError) {
+          console.error('Email sending failed:', emailError);
+          emailErrors.push({ email: user.email, error: emailError.message });
+        }
+      }
     } else {
       // Broadcast to all users
-      const users = await User.find().select('_id');
+      const users = await User.find().select('_id name email');
       const notifications = users.map(u => ({
         user: u._id,
         title,
         message,
-        type
+        type,
+        emailSent: shouldSendEmail
       }));
       await Notification.insertMany(notifications);
+      notificationsSent = users.length;
+      
+      // Send emails if requested
+      if (shouldSendEmail) {
+        for (const user of users) {
+          if (user.email) {
+            try {
+              await sendEmail({
+                to: user.email,
+                subject: title,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+                    <div style="background-color: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                      <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #22c55e; margin: 0;">GreenBull Trading</h1>
+                      </div>
+                      <h2 style="color: #111827; margin-bottom: 16px;">${title}</h2>
+                      <p style="color: #374151; font-size: 16px; line-height: 1.6;">${message}</p>
+                      <div style="text-align: center; margin: 30px 0;">
+                        <a href="${process.env.FRONTEND_URL || 'https://grebull.lovable.app'}/dashboard" 
+                           style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+                                  color: white; 
+                                  padding: 14px 30px; 
+                                  text-decoration: none; 
+                                  border-radius: 8px; 
+                                  font-weight: bold;
+                                  display: inline-block;">
+                          Go to Dashboard
+                        </a>
+                      </div>
+                      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                      <p style="color: #9ca3af; font-size: 12px; text-align: center;">© ${new Date().getFullYear()} GreenBull Trading. All rights reserved.</p>
+                    </div>
+                  </div>
+                `
+              });
+              emailsSent++;
+              console.log(`Notification email sent to ${user.email}`);
+            } catch (emailError) {
+              console.error(`Email sending failed for ${user.email}:`, emailError);
+              emailErrors.push({ email: user.email, error: emailError.message });
+            }
+          }
+        }
+      }
     }
     
     res.json({
       success: true,
-      message: userId ? 'Notification sent' : 'Broadcast sent to all users'
+      message: userId ? 'Notification sent' : 'Broadcast sent to all users',
+      data: {
+        notificationsSent,
+        emailsSent,
+        emailErrors: emailErrors.length > 0 ? emailErrors : undefined
+      }
     });
   } catch (error) {
     next(error);
