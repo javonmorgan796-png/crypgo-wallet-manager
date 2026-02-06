@@ -103,7 +103,8 @@ export function AdminNotifications() {
         userId: notificationType === 'individual' ? selectedUser : undefined,
         title,
         message,
-        type: notificationType === 'broadcast' ? 'admin' : 'system',
+        type: 'info',
+        sendEmail: sendEmail,
       });
 
       if (result.success) {
@@ -122,8 +123,8 @@ export function AdminNotifications() {
         toast({
           title: "Notification Sent",
           description: notificationType === 'broadcast' 
-            ? "Notification sent to all users" 
-            : `Notification sent to ${selectedUser}`,
+            ? `Notification sent to all users${sendEmail ? ' (with email)' : ''}`
+            : `Notification sent to user${sendEmail ? ' (with email)' : ''}`,
         });
 
         // Reset form

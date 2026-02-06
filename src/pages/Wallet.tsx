@@ -207,34 +207,34 @@ export default function WalletPage() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-muted-foreground text-sm">Available Balance</p>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-muted-foreground text-sm">Available Balance</p>
+                  <button
+                    type="button"
+                    onClick={() => setBalanceVisible(!balanceVisible)}
+                    className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200"
+                    aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+                  >
+                    {balanceVisible ? (
+                      <Eye className="h-4 w-4" />
+                    ) : (
+                      <EyeOff className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <div className="mt-1">
                   {isDataLoading ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       <span className="text-muted-foreground">Loading...</span>
                     </div>
                   ) : (
-                    <>
-                      <p className="text-4xl font-bold text-foreground font-display">
-                        {balanceVisible 
-                          ? `$${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                          : '******'
-                        }
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setBalanceVisible(!balanceVisible)}
-                        className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200"
-                        aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
-                      >
-                        {balanceVisible ? (
-                          <Eye className="h-5 w-5" />
-                        ) : (
-                          <EyeOff className="h-5 w-5" />
-                        )}
-                      </button>
-                    </>
+                    <p className="text-4xl font-bold text-foreground font-display">
+                      {balanceVisible 
+                        ? `$${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '******'
+                      }
+                    </p>
                   )}
                 </div>
               </div>
