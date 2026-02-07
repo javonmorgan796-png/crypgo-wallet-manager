@@ -35,43 +35,28 @@ import api from '@/services/api';
 
 const BACKEND_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
 
-// Helper component for KYC document images with proper error handling
+// Helper component for KYC document images - supports base64 data URIs and URLs
 const KYCDocumentImage = ({ url, alt }: { url: string; alt: string }) => {
-  const [imgSrc, setImgSrc] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (!url) {
-      setHasError(true);
-      setIsLoading(false);
-      return;
-    }
+  const resolvedUrl = (() => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    if (url.startsWith('http')) return url;
+    return `${BACKEND_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  })();
 
-    // Handle different URL formats
-    let finalUrl = url;
-    if (url.startsWith('data:')) {
-      finalUrl = url;
-    } else if (url.startsWith('http')) {
-      finalUrl = url;
-    } else {
-      // Relative path - prepend backend URL
-      finalUrl = `${BACKEND_URL}${url}`;
-    }
-
-    setImgSrc(finalUrl);
-    setIsLoading(false);
-  }, [url]);
-
-  if (isLoading) {
+  if (!resolvedUrl) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-muted">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground">
+        <ImageIcon className="h-8 w-8 mb-2" />
+        <span className="text-sm">No image available</span>
       </div>
     );
   }
 
-  if (hasError || !imgSrc) {
+  if (hasError) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground">
         <ImageIcon className="h-8 w-8 mb-2" />
@@ -81,14 +66,23 @@ const KYCDocumentImage = ({ url, alt }: { url: string; alt: string }) => {
   }
 
   return (
-    <img 
-      src={imgSrc}
-      alt={alt}
-      className="w-full h-full object-cover"
-      crossOrigin="anonymous"
-      onError={() => setHasError(true)}
-      onLoad={() => setIsLoading(false)}
-    />
+    <div className="relative w-full h-full">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      <img 
+        src={resolvedUrl}
+        alt={alt}
+        className={`w-full h-full object-cover transition-opacity ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+        onError={() => {
+          setHasError(true);
+          setIsLoading(false);
+        }}
+        onLoad={() => setIsLoading(false)}
+      />
+    </div>
   );
 };
 

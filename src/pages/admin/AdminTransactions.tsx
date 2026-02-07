@@ -39,52 +39,18 @@ import api from '@/services/api';
 
 const API_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
 
-// Helper component for receipt images with proper error handling
+// Helper component for receipt images - supports base64 data URIs and URLs
 const ReceiptImage = ({ url }: { url: string }) => {
-  const [imgSrc, setImgSrc] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    if (!url) {
-      setHasError(true);
-      setIsLoading(false);
-      return;
-    }
-
-    setHasError(false);
-    setIsLoading(true);
-
-    // Handle different URL formats
-    let finalUrl = url;
-    
-    // Check if it's base64 data
-    if (url.startsWith('data:')) {
-      finalUrl = url;
-    } 
-    // Check if it's already a full URL
-    else if (url.startsWith('http://') || url.startsWith('https://')) {
-      finalUrl = url;
-    }
-    // Handle relative paths - prepend API URL
-    else if (url.startsWith('/')) {
-      finalUrl = `${API_URL}${url}`;
-    }
-    // Handle paths without leading slash
-    else {
-      finalUrl = `${API_URL}/${url}`;
-    }
-
-    console.log('Loading receipt image:', { original: url, final: finalUrl });
-    setImgSrc(finalUrl);
-  }, [url, retryCount]);
-
-  const handleRetry = () => {
-    if (retryCount < 2) {
-      setRetryCount(prev => prev + 1);
-    }
-  };
+  const resolvedUrl = (() => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return `${API_URL}${url}`;
+    return `${API_URL}/${url}`;
+  })();
 
   if (!url) {
     return (
@@ -100,14 +66,8 @@ const ReceiptImage = ({ url }: { url: string }) => {
       <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground p-4">
         <Eye className="h-8 w-8 mb-2 opacity-50" />
         <span className="text-sm mb-2">Unable to load image</span>
-        {retryCount < 2 && (
-          <Button variant="outline" size="sm" onClick={handleRetry}>
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Retry
-          </Button>
-        )}
         <p className="text-xs mt-2 opacity-60 text-center break-all max-w-full">
-          {url.length > 50 ? `${url.substring(0, 50)}...` : url}
+          {url.startsWith('data:') ? 'Base64 image data' : url.length > 50 ? `${url.substring(0, 50)}...` : url}
         </p>
       </div>
     );
@@ -121,18 +81,14 @@ const ReceiptImage = ({ url }: { url: string }) => {
         </div>
       )}
       <img 
-        src={imgSrc}
+        src={resolvedUrl}
         alt="Payment Receipt"
         className={`w-full h-full object-contain transition-opacity ${isLoading ? 'opacity-0' : 'opacity-100'}`}
-        onError={(e) => {
-          console.error('Image load error for:', imgSrc);
+        onError={() => {
           setHasError(true);
           setIsLoading(false);
         }}
-        onLoad={() => {
-          console.log('Image loaded successfully:', imgSrc);
-          setIsLoading(false);
-        }}
+        onLoad={() => setIsLoading(false)}
       />
     </div>
   );
