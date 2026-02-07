@@ -7,14 +7,8 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Configure multer for KYC document uploads
-const storage = multer.diskStorage({
-  destination: './uploads/kyc',
-  filename: (req, file, cb) => {
-    const type = file.fieldname; // id_front, id_back, selfie, proof_of_address
-    cb(null, `${req.user._id}-${type}-${Date.now()}${path.extname(file.originalname)}`);
-  }
-});
+// Use memory storage - we'll store as base64 in the database
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -22,9 +16,9 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    const mimetype = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
     
-    if (extname && mimetype) {
+    if (extname || mimetype) {
       return cb(null, true);
     }
     cb(new Error('Only images and PDFs are allowed'));
@@ -69,21 +63,27 @@ router.post('/submit', protect, kycUpload, async (req, res, next) => {
       });
     }
     
-    // Build documents array
+    // Build documents array with base64 data URIs
     const documents = [];
     const docTypes = ['id_front', 'id_back', 'selfie', 'proof_of_address'];
     
     for (const type of docTypes) {
       if (files[type] && files[type][0]) {
+        const file = files[type][0];
+        const base64 = file.buffer.toString('base64');
+        const dataUri = `data:${file.mimetype};base64,${base64}`;
+        
         documents.push({
           type,
-          url: `/uploads/kyc/${files[type][0].filename}`,
+          url: dataUri,
           uploadedAt: new Date()
         });
+        
+        console.log(`KYC ${type} stored as base64, size: ${dataUri.length} chars`);
       }
     }
     
-    console.log('Documents to save:', documents);
+    console.log('Documents to save:', documents.length);
     
     // Update user KYC status
     req.user.kycDocuments = documents;

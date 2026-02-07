@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, TrendingUp, Target, Shield, Search, Loader2 } from 'lucide-react';
+import { Users, TrendingUp, Star, Search, Loader2, Flame } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ interface Trader {
   monthlyReturns: number[];
   minCopyAmount: number;
   maxCopyAmount: number;
+  copierCount: number;
 }
 
 interface CopyTradeType {
@@ -110,7 +111,6 @@ export default function CopyTrade() {
     }
   }, []);
 
-  // WebSocket for real-time trader updates
   useUserWebSocket({
     onTradersUpdate: (updatedTraders) => {
       setTraders(updatedTraders);
@@ -224,17 +224,25 @@ export default function CopyTrade() {
     setDialogOpen(true);
   };
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'low':
-        return 'bg-green-500/10 text-green-500 border-green-500/30';
-      case 'medium':
-        return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30';
-      case 'high':
-        return 'bg-red-500/10 text-red-500 border-red-500/30';
-      default:
-        return '';
-    }
+  // Derive badges from trader data
+  const getTraderBadges = (trader: Trader) => {
+    const badges: { label: string; color: string }[] = [];
+    if (trader.riskLevel === 'low') badges.push({ label: 'Low Leverage', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' });
+    if (trader.riskLevel === 'high') badges.push({ label: 'High Risk', color: 'bg-red-500/20 text-red-400 border-red-500/30' });
+    if (trader.winRate >= 90) badges.push({ label: 'Win Streak', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' });
+    if (trader.profitPercentage >= 50) badges.push({ label: 'Top Profit', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' });
+    if (trader.specialization) badges.push({ label: trader.specialization, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' });
+    return badges.slice(0, 2);
+  };
+
+  // Check if trader is "full" (many copiers)
+  const isTraderFull = (trader: Trader) => {
+    return (trader.copierCount || 0) >= 50;
+  };
+
+  const formatProfitValue = (value: number) => {
+    if (value >= 0) return `+${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   return (
@@ -267,140 +275,146 @@ export default function CopyTrade() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Professional Traders */}
-          <TabsContent value="traders" className="space-y-6">
+          {/* Professional Traders - New card layout matching reference */}
+          <TabsContent value="traders" className="space-y-4">
             {isLoadingTraders ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <Card key={i} className="bg-card border-border">
-                    <CardContent className="p-6">
-                      {/* Header Skeleton */}
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-14 w-14 rounded-full bg-muted animate-pulse" />
-                          <div>
-                            <div className="h-5 w-32 bg-muted animate-pulse rounded mb-1" />
-                            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-                          </div>
-                        </div>
-                        <div className="h-6 w-20 bg-muted animate-pulse rounded-full" />
-                      </div>
-                      {/* Stats Skeleton */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        {[1, 2, 3, 4].map((j) => (
-                          <div key={j} className="p-3 rounded-lg bg-secondary/50">
-                            <div className="h-4 w-16 bg-muted animate-pulse rounded mb-1" />
-                            <div className="h-5 w-12 bg-muted animate-pulse rounded" />
-                          </div>
-                        ))}
-                      </div>
-                      {/* Performance Skeleton */}
-                      <div className="mb-4">
-                        <div className="h-4 w-40 bg-muted animate-pulse rounded mb-2" />
-                        <div className="flex items-end gap-1 h-12">
-                          {[1, 2, 3, 4, 5, 6].map((j) => (
-                            <div key={j} className="flex-1 bg-muted animate-pulse rounded-t" style={{ height: `${30 + Math.random() * 40}%` }} />
-                          ))}
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-card border border-border rounded-xl p-5 animate-pulse">
+                    <div className="flex items-center gap-3 mb-5">
+                      <div className="h-12 w-12 rounded-full bg-muted" />
+                      <div className="flex-1">
+                        <div className="h-5 w-32 bg-muted rounded mb-1" />
+                        <div className="flex gap-2">
+                          <div className="h-5 w-20 bg-muted rounded-full" />
+                          <div className="h-5 w-20 bg-muted rounded-full" />
                         </div>
                       </div>
-                      <div className="h-12 w-full bg-muted animate-pulse rounded-lg mb-4" />
-                      <div className="h-10 w-full bg-muted animate-pulse rounded" />
-                    </CardContent>
-                  </Card>
+                      <div className="h-9 w-20 bg-muted rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mb-3">
+                      {[1,2,3].map(j => (
+                        <div key={j}>
+                          <div className="h-3 w-20 bg-muted rounded mb-2" />
+                          <div className="h-5 w-16 bg-muted rounded" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      {[1,2,3].map(j => (
+                        <div key={j}>
+                          <div className="h-3 w-20 bg-muted rounded mb-2" />
+                          <div className="h-5 w-16 bg-muted rounded" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : filteredTraders.length > 0 ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {filteredTraders.map((trader) => (
-                  <Card
-                    key={trader._id}
-                    className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover-lift"
-                  >
-                    <CardContent className="p-6">
-                      {/* Trader Header */}
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={trader.avatar}
-                            alt={trader.name}
-                            className="h-14 w-14 rounded-full border-2 border-primary"
-                          />
-                          <div>
-                            <h3 className="font-semibold text-foreground">{trader.name}</h3>
-                            <p className="text-sm text-muted-foreground">{trader.specialization}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className={getRiskColor(trader.riskLevel)}>
-                          {trader.riskLevel} risk
-                        </Badge>
-                      </div>
+              <div className="space-y-4">
+                {filteredTraders.map((trader) => {
+                  const badges = getTraderBadges(trader);
+                  const full = isTraderFull(trader);
+                  const roi = trader.profitPercentage || 0;
+                  const drawdown = Math.min(Math.abs(trader.monthlyReturns?.reduce((min, v) => Math.min(min, v), 0) || 0), 99);
+                  const followersProfit = trader.totalProfit || 0;
+                  const winRate = trader.winRate || 0;
+                  const profitLossRatio = winRate > 0 ? ((winRate / (100 - winRate)) * 10).toFixed(2) : '0.00';
+                  const sharpeRatio = roi > 0 ? (roi / (drawdown || 1) * 0.1).toFixed(2) : '--';
 
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="p-3 rounded-lg bg-secondary/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Target className="h-4 w-4 text-primary" />
-                            <span className="text-xs text-muted-foreground">Win Rate</span>
+                  return (
+                    <div
+                      key={trader._id}
+                      className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 transition-all duration-300"
+                    >
+                      {/* Header: Avatar, Name, Badges, Star, Copy/Full button */}
+                      <div className="flex items-center gap-3 mb-5">
+                        <img
+                          src={trader.avatar}
+                          alt={trader.name}
+                          className="h-12 w-12 rounded-full border-2 border-border object-cover"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-foreground text-lg truncate">{trader.name}</h3>
+                            <span className="text-lg">🤝</span>
                           </div>
-                          <p className="font-bold text-foreground">{trader.winRate}%</p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {badges.map((badge, idx) => (
+                              <span key={idx} className={`text-xs px-2 py-0.5 rounded-full border ${badge.color}`}>
+                                {badge.label}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <div className="p-3 rounded-lg bg-secondary/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="h-4 w-4 text-primary" />
-                            <span className="text-xs text-muted-foreground">Total Return</span>
-                          </div>
-                          <p className="font-bold text-primary">+{trader.profitPercentage}%</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-secondary/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Users className="h-4 w-4 text-primary" />
-                            <span className="text-xs text-muted-foreground">Followers</span>
-                          </div>
-                          <p className="font-bold text-foreground">{trader.followers.toLocaleString()}</p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-secondary/50">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Shield className="h-4 w-4 text-primary" />
-                            <span className="text-xs text-muted-foreground">Trades</span>
-                          </div>
-                          <p className="font-bold text-foreground">{trader.trades.toLocaleString()}</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Star className="h-5 w-5 text-muted-foreground hover:text-amber-400 cursor-pointer transition-colors" />
+                          {full ? (
+                            <span className="inline-flex items-center gap-1 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold">
+                              <Flame className="h-4 w-4" />
+                              Full
+                            </span>
+                          ) : (
+                            <Button
+                              onClick={() => openCopyDialog(trader)}
+                              className="rounded-full px-5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 font-semibold text-sm border-0"
+                            >
+                              Copy
+                            </Button>
+                          )}
                         </div>
                       </div>
 
-                      {/* Monthly Performance */}
-                      <div className="mb-4">
-                        <p className="text-xs text-muted-foreground mb-2">Last 6 months performance</p>
-                        <div className="flex items-end gap-1 h-12">
-                          {trader.monthlyReturns.map((value, index) => (
-                            <div
-                              key={index}
-                              className={`flex-1 rounded-t ${value >= 0 ? 'bg-primary' : 'bg-destructive'}`}
-                              style={{
-                                height: `${Math.min(Math.abs(value) * 2, 100)}%`,
-                                minHeight: '4px',
-                              }}
-                            />
-                          ))}
+                      {/* Stats Row 1 */}
+                      <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">7D ROI</p>
+                          <p className={`font-bold text-base ${roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {roi >= 0 ? '+' : ''}{roi.toFixed(2)}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">7D Max. Drawdown</p>
+                          <p className={`font-bold text-base ${drawdown > 0 ? 'text-emerald-400' : 'text-foreground'}`}>
+                            {drawdown > 0 ? '+' : ''}{drawdown.toFixed(2)}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">7D Followers' P&L</p>
+                          <p className={`font-bold text-base ${followersProfit >= 0 ? 'text-foreground' : 'text-red-400'}`}>
+                            {formatProfitValue(followersProfit)}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Total Profit */}
-                      <div className="flex items-center justify-between mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                        <span className="text-sm text-muted-foreground">Total Profit Generated</span>
-                        <span className="font-bold text-primary">
-                          ${(trader.totalProfit / 1000000).toFixed(2)}M
-                        </span>
-                      </div>
+                      {/* Divider */}
+                      <div className="border-t border-border mb-4" />
 
-                      <Button
-                        onClick={() => openCopyDialog(trader)}
-                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                      >
-                        Copy Trader
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                      {/* Stats Row 2 */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">7D Win Rate</p>
+                          <p className={`font-bold text-base ${winRate >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            +{winRate.toFixed(2)}%
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">7D Profit-to-Loss Ratio</p>
+                          <p className="font-bold text-base text-foreground">
+                            {profitLossRatio} : 0
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">7D Sharpe Ratio</p>
+                          <p className={`font-bold text-base ${sharpeRatio !== '--' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {sharpeRatio !== '--' ? `+${sharpeRatio}` : '--'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <Card className="bg-card border-border">
@@ -423,67 +437,59 @@ export default function CopyTrade() {
               </div>
             ) : myCopies.length > 0 ? (
               myCopies.map((copy) => (
-                <Card key={copy._id} className="bg-card border-border">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={copy.trader?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${copy.trader?.name}`}
-                          alt={copy.trader?.name}
-                          className="h-14 w-14 rounded-full border-2 border-primary"
-                        />
-                        <div>
-                          <h3 className="font-semibold text-foreground">{copy.trader?.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Started: {new Date(copy.startDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Invested</p>
-                          <p className="font-semibold text-foreground">
-                            ${copy.amount.toLocaleString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Current Value</p>
-                          <p className="font-semibold text-foreground">
-                            ${copy.currentValue?.toFixed(2) || copy.amount.toFixed(2)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Profit</p>
-                          <p className={`font-semibold ${copy.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                            {copy.profit >= 0 ? '+' : ''}${copy.profit?.toFixed(2) || '0.00'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Status</p>
-                          <Badge
-                            variant="outline"
-                            className={
-                              copy.status === 'active'
-                                ? 'bg-primary/10 text-primary border-primary/30'
-                                : 'bg-muted text-muted-foreground'
-                            }
-                          >
-                            {copy.status}
-                          </Badge>
-                        </div>
-                      </div>
-                      {copy.status === 'active' && (
-                        <Button
-                          variant="outline"
-                          className="border-destructive text-destructive hover:bg-destructive/10"
-                          onClick={() => handleStopCopy(copy._id)}
-                        >
-                          Stop Copy
-                        </Button>
-                      )}
+                <div key={copy._id} className="bg-card border border-border rounded-xl p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <img
+                      src={copy.trader?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${copy.trader?.name}`}
+                      alt={copy.trader?.name}
+                      className="h-12 w-12 rounded-full border-2 border-border object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-foreground text-lg truncate">{copy.trader?.name}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Started: {new Date(copy.startDate).toLocaleDateString()}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
+                    <Badge
+                      variant="outline"
+                      className={
+                        copy.status === 'active'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-muted text-muted-foreground'
+                      }
+                    >
+                      {copy.status}
+                    </Badge>
+                  </div>
+
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Invested</p>
+                      <p className="font-bold text-foreground">${copy.amount.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Current Value</p>
+                      <p className="font-bold text-foreground">${copy.currentValue?.toFixed(2) || copy.amount.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Profit</p>
+                      <p className={`font-bold ${copy.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {copy.profit >= 0 ? '+' : ''}${copy.profit?.toFixed(2) || '0.00'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {copy.status === 'active' && (
+                    <Button
+                      variant="outline"
+                      className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                      onClick={() => handleStopCopy(copy._id)}
+                    >
+                      Stop Copy
+                    </Button>
+                  )}
+                </div>
               ))
             ) : (
               <Card className="bg-card border-border">

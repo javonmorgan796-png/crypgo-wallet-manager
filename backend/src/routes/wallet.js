@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
@@ -11,18 +10,7 @@ const { notifyNewDeposit, notifyNewWithdrawal } = require('../websocket/adminUpd
 
 const router = express.Router();
 
-// Ensure upload directory exists at startup
-const uploadDir = path.join(process.cwd(), 'uploads', 'receipts');
-try {
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-  console.log('Upload directory ready:', uploadDir);
-} catch (err) {
-  console.error('Failed to create upload directory:', err);
-}
-
-// Configure multer for file uploads with memory storage first
+// Use memory storage - we'll store as base64 in the database
 const storage = multer.memoryStorage();
 
 const upload = multer({
@@ -93,35 +81,14 @@ router.post('/deposit', protect, (req, res, next) => {
         });
       }
 
-      // Store receipt as base64 in database if file upload directory isn't available
+      // Store receipt as base64 data URI in the database
       let receiptUrl = null;
-      let receiptData = null;
       
       if (req.file && req.file.buffer) {
-        console.log('Processing receipt file:', req.file.originalname, req.file.mimetype);
-        
-        try {
-          // Ensure directory exists
-          if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-          }
-          
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-          const ext = path.extname(req.file.originalname || '.jpg').toLowerCase();
-          const filename = `${uniqueSuffix}${ext}`;
-          const filepath = path.join(uploadDir, filename);
-          
-          fs.writeFileSync(filepath, req.file.buffer);
-          receiptUrl = `/uploads/receipts/${filename}`;
-          console.log('Receipt saved to disk:', receiptUrl);
-        } catch (saveErr) {
-          console.error('Error saving receipt file to disk:', saveErr);
-          // Fallback: Store as base64 data URL
-          const base64 = req.file.buffer.toString('base64');
-          receiptData = `data:${req.file.mimetype};base64,${base64}`;
-          receiptUrl = receiptData;
-          console.log('Receipt stored as base64');
-        }
+        console.log('Converting receipt to base64:', req.file.originalname, req.file.mimetype);
+        const base64 = req.file.buffer.toString('base64');
+        receiptUrl = `data:${req.file.mimetype};base64,${base64}`;
+        console.log('Receipt stored as base64 data URI, length:', receiptUrl.length);
       }
       
       const transactionData = {
@@ -133,7 +100,7 @@ router.post('/deposit', protect, (req, res, next) => {
         receiptUrl: receiptUrl
       };
       
-      console.log('Creating transaction:', transactionData);
+      console.log('Creating transaction with receipt:', receiptUrl ? 'base64 present' : 'no receipt');
       
       const transaction = await Transaction.create(transactionData);
       
