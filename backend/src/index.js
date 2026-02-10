@@ -1,66 +1,109 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const mongoose = require('mongoose');
-const path = require('path');
-const http = require('http');
-const WebSocket = require('ws');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import http from 'http';
+import WebSocket from 'ws';
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/user');
-const walletRoutes = require('./routes/wallet');
-const kycRoutes = require('./routes/kyc');
-const adminRoutes = require('./routes/admin');
-const notificationRoutes = require('./routes/notifications');
-const investmentRoutes = require('./routes/investments');
-const copyTradeRoutes = require('./routes/copyTrade');
-const signalRoutes = require('./routes/signals');
+// Import your routes
+import authRoutes from './routes/auth.js';
+import userRoutes from './routes/user.js';
+import walletRoutes from './routes/wallet.js';
+import kycRoutes from './routes/kyc.js';
+import adminRoutes from './routes/admin.js';
+import notificationRoutes from './routes/notifications.js';
+import investmentRoutes from './routes/investments.js';
+import copyTradeRoutes from './routes/copyTrade.js';
+import signalRoutes from './routes/signals.js';
 
 // Import WebSocket handlers
-const { setupWebSocket } = require('./websocket/priceUpdates');
-const { setupBalanceWebSocket } = require('./websocket/balanceUpdates');
-const { setupAdminUpdates } = require('./websocket/adminUpdates');
-const { setupUserUpdates } = require('./websocket/userUpdates');
+import { setupWebSocket } from './websocket/priceUpdates.js';
+import { setupBalanceWebSocket } from './websocket/balanceUpdates.js';
+import { setupAdminUpdates } from './websocket/adminUpdates.js';
+import { setupUserUpdates } from './websocket/userUpdates.js';
 
 // Import cron jobs
-const { startCronJobs } = require('./cron/investmentCron');
+import { startCronJobs } from './cron/investmentCron.js';
+
+// __dirname fix for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
 
-// WebSocket setup (same as before)
+// -------------------- WebSockets --------------------
 const priceWss = new WebSocket.Server({ noServer: true });
 setupWebSocket(priceWss);
+
 const balanceWss = new WebSocket.Server({ noServer: true });
 setupBalanceWebSocket(balanceWss);
+
 const adminWss = new WebSocket.Server({ noServer: true });
 setupAdminUpdates(adminWss);
+
 const userWss = new WebSocket.Server({ noServer: true });
 setupUserUpdates(userWss);
 
-server.on('upgrade', (req, socket, head) => {
-  const pathname = req.url;
-  if (pathname === '/ws/prices') priceWss.handleUpgrade(req, socket, head, ws => priceWss.emit('connection', ws, req));
-  else if (pathname === '/ws/balance') balanceWss.handleUpgrade(req, socket, head, ws => balanceWss.emit('connection', ws, req));
-  else if (pathname === '/ws/admin') adminWss.handleUpgrade(req, socket, head, ws => adminWss.emit('connection', ws, req));
-  else if (pathname === '/ws/user') userWss.handleUpgrade(req, socket, head, ws => userWss.emit('connection', ws, req));
-  else socket.destroy();
+// Handle WebSocket upgrades
+server.on('upgrade', (request, socket, head) => {
+  const pathname = request.url;
+
+  if (pathname === '/ws/prices') {
+    priceWss.handleUpgrade(request, socket, head, (ws) => priceWss.emit('connection', ws, request));
+  } else if (pathname === '/ws/balance') {
+    balanceWss.handleUpgrade(request, socket, head, (ws) => balanceWss.emit('connection', ws, request));
+  } else if (pathname === '/ws/admin') {
+    adminWss.handleUpgrade(request, socket, head, (ws) => adminWss.emit('connection', ws, request));
+  } else if (pathname === '/ws/user') {
+    userWss.handleUpgrade(request, socket, head, (ws) => userWss.emit('connection', ws, request));
+  } else {
+    socket.destroy();
+  }
 });
 
-// Middleware
+// -------------------- Middleware --------------------
 app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+
+const allowedOrigins = [
+  'https://greenb.lovable.app',
+  'https://greebull.onrender.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.includes(origin) ||
+                      origin.includes('lovable.app') ||
+                      origin.includes('lovableproject.com');
+    if (isAllowed) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve frontend build (Vite outputs to src/dist)
-const frontendBuildPath = path.join(__dirname, '../../src/dist');
-app.use(express.static(frontendBuildPath));
+// Serve static frontend files from Vite build
+const frontendDistPath = path.join(__dirname, '../../dist');
+app.use(express.static(frontendDistPath));
 
-// API routes
+// -------------------- API Routes --------------------
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -71,25 +114,44 @@ app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
 
-// Catch-all: serve index.html for client-side routing (React refresh fix)
+// Health check
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// Fallback for all other frontend routes (SPA support)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendBuildPath, 'index.html'));
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ MongoDB connected'))
-.catch(err => {
-  console.error('❌ MongoDB connection error:', err);
-  process.exit(1);
+// Error handling
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error'
+  });
 });
 
-// Start server
+// -------------------- MongoDB Connection --------------------
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    console.log('✅ MongoDB connected successfully');
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
+
+// -------------------- Start Server --------------------
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-  startCronJobs();
+connectDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 WebSocket servers available:`);
+    console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
+    console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
+    startCronJobs();
+  });
 });
+
+export { app, server };
