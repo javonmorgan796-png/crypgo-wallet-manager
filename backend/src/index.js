@@ -8,7 +8,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 
-// Routes
+// Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const walletRoutes = require('./routes/wallet');
@@ -19,20 +19,20 @@ const investmentRoutes = require('./routes/investments');
 const copyTradeRoutes = require('./routes/copyTrade');
 const signalRoutes = require('./routes/signals');
 
-// WebSockets
+// WebSocket handlers
 const { setupWebSocket } = require('./websocket/priceUpdates');
 const { setupBalanceWebSocket } = require('./websocket/balanceUpdates');
 const { setupAdminUpdates } = require('./websocket/adminUpdates');
 const { setupUserUpdates } = require('./websocket/userUpdates');
 
-// Cron jobs
+// Cron
 const { startCronJobs } = require('./cron/investmentCron');
 
 const app = express();
 const server = http.createServer(app);
 
 /* =======================
-   WebSocket Setup
+   WEBSOCKETS
 ======================= */
 const priceWss = new WebSocket.Server({ noServer: true });
 const balanceWss = new WebSocket.Server({ noServer: true });
@@ -45,67 +45,52 @@ setupAdminUpdates(adminWss);
 setupUserUpdates(userWss);
 
 server.on('upgrade', (req, socket, head) => {
-  const pathname = req.url;
+  const { url } = req;
 
-  if (pathname === '/ws/prices') {
-    priceWss.handleUpgrade(req, socket, head, ws => {
-      priceWss.emit('connection', ws, req);
-    });
-  } else if (pathname === '/ws/balance') {
-    balanceWss.handleUpgrade(req, socket, head, ws => {
-      balanceWss.emit('connection', ws, req);
-    });
-  } else if (pathname === '/ws/admin') {
-    adminWss.handleUpgrade(req, socket, head, ws => {
-      adminWss.emit('connection', ws, req);
-    });
-  } else if (pathname === '/ws/user') {
-    userWss.handleUpgrade(req, socket, head, ws => {
-      userWss.emit('connection', ws, req);
-    });
+  if (url === '/ws/prices') {
+    priceWss.handleUpgrade(req, socket, head, ws =>
+      priceWss.emit('connection', ws, req)
+    );
+  } else if (url === '/ws/balance') {
+    balanceWss.handleUpgrade(req, socket, head, ws =>
+      balanceWss.emit('connection', ws, req)
+    );
+  } else if (url === '/ws/admin') {
+    adminWss.handleUpgrade(req, socket, head, ws =>
+      adminWss.emit('connection', ws, req)
+    );
+  } else if (url === '/ws/user') {
+    userWss.handleUpgrade(req, socket, head, ws =>
+      userWss.emit('connection', ws, req)
+    );
   } else {
     socket.destroy();
   }
 });
 
 /* =======================
-   Security & Middleware
+   MIDDLEWARE
 ======================= */
 app.use(helmet());
 
-const allowedOrigins = [
-  'http://localhost:8080',
-  'http://localhost:5173',
-  process.env.FRONTEND_URL
-].filter(Boolean);
-
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      origin.includes('lovable.app') ||
-      origin.includes('lovableproject.com')
-    ) {
-      return cb(null, true);
-    }
-    cb(new Error('Not allowed by CORS'));
-  },
+  origin: true,
   credentials: true
 }));
 
-app.use(rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
-}));
-
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use('/uploads', express.static('uploads'));
 
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100
+});
+app.use('/api', limiter);
+
 /* =======================
-   API Routes
+   API ROUTES
 ======================= */
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
@@ -118,45 +103,40 @@ app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+  res.json({ status: 'ok' });
 });
 
 /* =======================
-   🔥 VITE SPA FIX (THE KEY)
+   SERVE VITE FRONTEND
 ======================= */
-const distPath = path.join(__dirname, 'dist');
+const distPath = path.join(__dirname, '../../frontend/dist');
 
-// Serve frontend
 app.use(express.static(distPath));
 
-// Catch ALL non-API routes
+// SPA catch-all (THIS FIXES REFRESH ERRORS)
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
 /* =======================
-   Error Handler
+   ERROR HANDLER
 ======================= */
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({
-    success: false,
-    message: err.message || 'Server error'
-  });
+  res.status(500).json({ success: false, message: err.message });
 });
 
 /* =======================
-   Database & Server
+   DB + SERVER START
 ======================= */
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected'))
+  .then(() => {
+    console.log('✅ MongoDB connected');
+    server.listen(process.env.PORT || 3001, () => {
+      console.log('🚀 Server running');
+      startCronJobs();
+    });
+  })
   .catch(err => {
     console.error('❌ MongoDB error', err);
-    process.exit(1);
   });
-
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  startCronJobs();
-});
