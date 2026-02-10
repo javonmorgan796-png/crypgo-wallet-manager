@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const http = require('http');
 const WebSocket = require('ws');
-const path = require('path');
+const path = require('path'); // Added for frontend static serving
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -31,7 +31,7 @@ const { startCronJobs } = require('./cron/investmentCron');
 const app = express();
 const server = http.createServer(app);
 
-// --- WebSocket setup ---
+// ---------------- WebSocket Setup ---------------- //
 const priceWss = new WebSocket.Server({ noServer: true });
 setupWebSocket(priceWss);
 
@@ -48,19 +48,27 @@ server.on('upgrade', (request, socket, head) => {
   const pathname = request.url;
 
   if (pathname === '/ws/prices') {
-    priceWss.handleUpgrade(request, socket, head, (ws) => priceWss.emit('connection', ws, request));
+    priceWss.handleUpgrade(request, socket, head, (ws) => {
+      priceWss.emit('connection', ws, request);
+    });
   } else if (pathname === '/ws/balance') {
-    balanceWss.handleUpgrade(request, socket, head, (ws) => balanceWss.emit('connection', ws, request));
+    balanceWss.handleUpgrade(request, socket, head, (ws) => {
+      balanceWss.emit('connection', ws, request);
+    });
   } else if (pathname === '/ws/admin') {
-    adminWss.handleUpgrade(request, socket, head, (ws) => adminWss.emit('connection', ws, request));
+    adminWss.handleUpgrade(request, socket, head, (ws) => {
+      adminWss.emit('connection', ws, request);
+    });
   } else if (pathname === '/ws/user') {
-    userWss.handleUpgrade(request, socket, head, (ws) => userWss.emit('connection', ws, request));
+    userWss.handleUpgrade(request, socket, head, (ws) => {
+      userWss.emit('connection', ws, request);
+    });
   } else {
     socket.destroy();
   }
 });
 
-// --- Security middleware ---
+// ---------------- Middleware ---------------- //
 app.use(helmet());
 
 const allowedOrigins = [
@@ -76,14 +84,19 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    const isAllowed = allowedOrigins.includes(origin) || origin.includes('lovable.app') || origin.includes('lovableproject.com');
-    if (isAllowed) callback(null, true);
-    else callback(new Error('Not allowed by CORS'));
+    const isAllowed = allowedOrigins.includes(origin) ||
+                      origin.includes('lovable.app') ||
+                      origin.includes('lovableproject.com');
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   credentials: true
 }));
 
-// --- Rate limiting ---
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -91,14 +104,12 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// --- Body parser ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// --- Static files for uploads ---
 app.use('/uploads', express.static('uploads'));
 
-// --- API routes ---
+// ---------------- API Routes ---------------- //
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -108,22 +119,25 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
-app.use('/api/transactions', require('./routes/wallet'));
+app.use('/api/transactions', walletRoutes);
 
-// --- Health check ---
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// --- Serve frontend (SPA fix) ---
-const distPath = path.join(__dirname, '../../dist'); // Adjust path: backend/src -> root/dist
-app.use(express.static(distPath));
+// ---------------- Serve Frontend ---------------- //
+// Make sure to build your frontend first using `npm run build:frontend`
+// Adjust this path if your frontend build output is elsewhere
+const frontendPath = path.join(__dirname, '../../dist');
+app.use(express.static(frontendPath));
 
+// Catch-all route for client-side routing
 app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+  res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-// --- Error handling middleware ---
+// ---------------- Error Handling ---------------- //
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
@@ -132,7 +146,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// --- MongoDB connection ---
+// ---------------- MongoDB Connection ---------------- //
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -146,11 +160,17 @@ const connectDB = async () => {
   }
 };
 
-// --- Start server ---
+// ---------------- Start Server ---------------- //
 const PORT = process.env.PORT || 3001;
+
 connectDB().then(() => {
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 WebSocket servers available:`);
+    console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
+    console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
+
+    // Start cron jobs
     startCronJobs();
   });
 });
