@@ -1,11 +1,11 @@
 require('dotenv').config();
 const express = require('express');
-const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const http = require('http');
+const path = require('path');
 const WebSocket = require('ws');
 
 // Import routes
@@ -31,7 +31,7 @@ const { startCronJobs } = require('./cron/investmentCron');
 const app = express();
 const server = http.createServer(app);
 
-// --- WebSocket Setup ---
+// WebSocket setup
 const priceWss = new WebSocket.Server({ noServer: true });
 setupWebSocket(priceWss);
 
@@ -44,9 +44,9 @@ setupAdminUpdates(adminWss);
 const userWss = new WebSocket.Server({ noServer: true });
 setupUserUpdates(userWss);
 
+// Handle WebSocket upgrade requests
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url;
-
   if (pathname === '/ws/prices') priceWss.handleUpgrade(request, socket, head, ws => priceWss.emit('connection', ws, request));
   else if (pathname === '/ws/balance') balanceWss.handleUpgrade(request, socket, head, ws => balanceWss.emit('connection', ws, request));
   else if (pathname === '/ws/admin') adminWss.handleUpgrade(request, socket, head, ws => adminWss.emit('connection', ws, request));
@@ -54,10 +54,10 @@ server.on('upgrade', (request, socket, head) => {
   else socket.destroy();
 });
 
-// --- Middleware ---
+// Security middleware
 app.use(helmet());
 
-// CORS
+// CORS configuration
 const allowedOrigins = [
   'https://greenb.lovable.app',
   'https://greebull.onrender.com',
@@ -77,19 +77,21 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiter
-const limiter = rateLimit({
+// Rate limiting
+app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { error: 'Too many requests, please try again later.' }
-});
-app.use('/api/', limiter);
+}));
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// --- API Routes ---
+// Static files for uploads
+app.use('/uploads', express.static('uploads'));
+
+// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -99,46 +101,58 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
+app.use('/api/transactions', walletRoutes); // For transactions
 
-// --- Frontend Build Serving ---
-const frontendPath = path.join(__dirname, '../dist'); // <-- Vite build folder
+// Serve frontend build
+// Assuming frontend build is in project_root/dist
+const frontendPath = path.join(__dirname, '../../dist'); // backend/src -> ../../dist
 app.use(express.static(frontendPath));
 
-// SPA refresh: serve index.html for all non-API routes
+// React refresh / direct URL access
 app.get('*', (req, res) => {
-  // Ignore API calls
   if (req.path.startsWith('/api')) return res.status(404).json({ success: false, message: 'API endpoint not found' });
-
   res.sendFile(path.join(frontendPath, 'index.html'), err => {
     if (err) res.status(500).send(err);
   });
 });
 
-// --- Error handler ---
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
 });
 
-// --- MongoDB connection ---
+// MongoDB connection
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    console.log('✅ MongoDB connected');
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    console.log('✅ MongoDB connected successfully');
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
     process.exit(1);
   }
 };
 
-// --- Start server ---
+// Start server
 const PORT = process.env.PORT || 3001;
-
 connectDB().then(() => {
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 WebSocket servers available:`);
+    console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
+    console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
+
     startCronJobs();
   });
 });
 
 module.exports = { app, server };
+    
