@@ -19,79 +19,86 @@ const investmentRoutes = require('./routes/investments');
 const copyTradeRoutes = require('./routes/copyTrade');
 const signalRoutes = require('./routes/signals');
 
-// WebSocket handlers
+// Import WebSocket handlers
 const { setupWebSocket } = require('./websocket/priceUpdates');
 const { setupBalanceWebSocket } = require('./websocket/balanceUpdates');
 const { setupAdminUpdates } = require('./websocket/adminUpdates');
 const { setupUserUpdates } = require('./websocket/userUpdates');
 
-// Cron
+// Import cron jobs
 const { startCronJobs } = require('./cron/investmentCron');
 
 const app = express();
 const server = http.createServer(app);
 
-/* =======================
-   WEBSOCKETS
-======================= */
+// --- WebSocket setup ---
 const priceWss = new WebSocket.Server({ noServer: true });
-const balanceWss = new WebSocket.Server({ noServer: true });
-const adminWss = new WebSocket.Server({ noServer: true });
-const userWss = new WebSocket.Server({ noServer: true });
-
 setupWebSocket(priceWss);
+
+const balanceWss = new WebSocket.Server({ noServer: true });
 setupBalanceWebSocket(balanceWss);
+
+const adminWss = new WebSocket.Server({ noServer: true });
 setupAdminUpdates(adminWss);
+
+const userWss = new WebSocket.Server({ noServer: true });
 setupUserUpdates(userWss);
 
-server.on('upgrade', (req, socket, head) => {
-  const { url } = req;
+server.on('upgrade', (request, socket, head) => {
+  const pathname = request.url;
 
-  if (url === '/ws/prices') {
-    priceWss.handleUpgrade(req, socket, head, ws =>
-      priceWss.emit('connection', ws, req)
-    );
-  } else if (url === '/ws/balance') {
-    balanceWss.handleUpgrade(req, socket, head, ws =>
-      balanceWss.emit('connection', ws, req)
-    );
-  } else if (url === '/ws/admin') {
-    adminWss.handleUpgrade(req, socket, head, ws =>
-      adminWss.emit('connection', ws, req)
-    );
-  } else if (url === '/ws/user') {
-    userWss.handleUpgrade(req, socket, head, ws =>
-      userWss.emit('connection', ws, req)
-    );
+  if (pathname === '/ws/prices') {
+    priceWss.handleUpgrade(request, socket, head, (ws) => priceWss.emit('connection', ws, request));
+  } else if (pathname === '/ws/balance') {
+    balanceWss.handleUpgrade(request, socket, head, (ws) => balanceWss.emit('connection', ws, request));
+  } else if (pathname === '/ws/admin') {
+    adminWss.handleUpgrade(request, socket, head, (ws) => adminWss.emit('connection', ws, request));
+  } else if (pathname === '/ws/user') {
+    userWss.handleUpgrade(request, socket, head, (ws) => userWss.emit('connection', ws, request));
   } else {
     socket.destroy();
   }
 });
 
-/* =======================
-   MIDDLEWARE
-======================= */
+// --- Security middleware ---
 app.use(helmet());
 
+const allowedOrigins = [
+  'https://greenb.lovable.app',
+  'https://greebull.onrender.com',
+  'https://preview--greenb.lovable.app',
+  'https://id-preview--f7fd61ff-0041-4214-af69-75513e876021.lovable.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.includes(origin) || origin.includes('lovable.app') || origin.includes('lovableproject.com');
+    if (isAllowed) callback(null, true);
+    else callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 
+// --- Rate limiting ---
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
+
+// --- Body parser ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// --- Static files for uploads ---
 app.use('/uploads', express.static('uploads'));
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
-});
-app.use('/api', limiter);
-
-/* =======================
-   API ROUTES
-======================= */
+// --- API routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -101,42 +108,51 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
+app.use('/api/transactions', require('./routes/wallet'));
 
+// --- Health check ---
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-/* =======================
-   SERVE VITE FRONTEND
-======================= */
-const distPath = path.join(__dirname, '../../frontend/dist');
-
+// --- Serve frontend (SPA fix) ---
+const distPath = path.join(__dirname, '../../dist'); // Adjust path: backend/src -> root/dist
 app.use(express.static(distPath));
 
-// SPA catch-all (THIS FIXES REFRESH ERRORS)
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-/* =======================
-   ERROR HANDLER
-======================= */
+// --- Error handling middleware ---
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ success: false, message: err.message });
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error'
+  });
 });
 
-/* =======================
-   DB + SERVER START
-======================= */
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('✅ MongoDB connected');
-    server.listen(process.env.PORT || 3001, () => {
-      console.log('🚀 Server running');
-      startCronJobs();
+// --- MongoDB connection ---
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
     });
-  })
-  .catch(err => {
-    console.error('❌ MongoDB error', err);
+    console.log('✅ MongoDB connected successfully');
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
+
+// --- Start server ---
+const PORT = process.env.PORT || 3001;
+connectDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    startCronJobs();
   });
+});
+
+module.exports = { app, server };
