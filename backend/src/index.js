@@ -4,12 +4,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import http from 'http';
-import WebSocket from 'ws';
+import { WebSocketServer } from 'ws';
+import path from 'path';
 
-// Import your routes
+// Import API routes
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/user.js';
 import walletRoutes from './routes/wallet.js';
@@ -29,27 +28,22 @@ import { setupUserUpdates } from './websocket/userUpdates.js';
 // Import cron jobs
 import { startCronJobs } from './cron/investmentCron.js';
 
-// __dirname fix for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const server = http.createServer(app);
 
-// -------------------- WebSockets --------------------
-const priceWss = new WebSocket.Server({ noServer: true });
+// ----------------- WebSocket Setup -----------------
+const priceWss = new WebSocketServer({ noServer: true });
 setupWebSocket(priceWss);
 
-const balanceWss = new WebSocket.Server({ noServer: true });
+const balanceWss = new WebSocketServer({ noServer: true });
 setupBalanceWebSocket(balanceWss);
 
-const adminWss = new WebSocket.Server({ noServer: true });
+const adminWss = new WebSocketServer({ noServer: true });
 setupAdminUpdates(adminWss);
 
-const userWss = new WebSocket.Server({ noServer: true });
+const userWss = new WebSocketServer({ noServer: true });
 setupUserUpdates(userWss);
 
-// Handle WebSocket upgrades
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url;
 
@@ -66,7 +60,7 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
-// -------------------- Middleware --------------------
+// ----------------- Middleware -----------------
 app.use(helmet());
 
 const allowedOrigins = [
@@ -74,7 +68,7 @@ const allowedOrigins = [
   'https://greebull.onrender.com',
   'http://localhost:5173',
   'http://localhost:3000',
-  process.env.FRONTEND_URL
+  process.env.FRONTEND_URL,
 ].filter(Boolean);
 
 app.use(cors({
@@ -83,8 +77,7 @@ app.use(cors({
     const isAllowed = allowedOrigins.includes(origin) ||
                       origin.includes('lovable.app') ||
                       origin.includes('lovableproject.com');
-    if (isAllowed) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
+    callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
   },
   credentials: true
 }));
@@ -99,11 +92,7 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static frontend files from Vite build
-const frontendDistPath = path.join(__dirname, '../../dist');
-app.use(express.static(frontendDistPath));
-
-// -------------------- API Routes --------------------
+// ----------------- API Routes -----------------
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -114,15 +103,16 @@ app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+// ----------------- Serve Frontend -----------------
+const distPath = path.resolve('backend/dist');
+app.use(express.static(distPath));
 
-// Fallback for all other frontend routes (SPA support)
+// SPA fallback for refresh routing
 app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendDistPath, 'index.html'));
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Error handling
+// ----------------- Error Handling -----------------
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
@@ -131,10 +121,13 @@ app.use((err, req, res, next) => {
   });
 });
 
-// -------------------- MongoDB Connection --------------------
+// ----------------- MongoDB Connection -----------------
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
     console.log('✅ MongoDB connected successfully');
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
@@ -142,14 +135,17 @@ const connectDB = async () => {
   }
 };
 
-// -------------------- Start Server --------------------
+// ----------------- Start Server -----------------
 const PORT = process.env.PORT || 3001;
+
 connectDB().then(() => {
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 WebSocket servers available:`);
-    console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
-    console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
+    console.log(`📡 WebSocket servers:`);
+    console.log(`   Prices: ws://localhost:${PORT}/ws/prices`);
+    console.log(`   Balance: ws://localhost:${PORT}/ws/balance`);
+
+    // Start cron jobs
     startCronJobs();
   });
 });
