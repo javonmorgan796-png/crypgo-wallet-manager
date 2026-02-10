@@ -1,11 +1,11 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const http = require('http');
-const path = require('path');
 const WebSocket = require('ws');
 
 // Import routes
@@ -31,7 +31,7 @@ const { startCronJobs } = require('./cron/investmentCron');
 const app = express();
 const server = http.createServer(app);
 
-// WebSocket setup
+// --- WebSocket Setup ---
 const priceWss = new WebSocket.Server({ noServer: true });
 setupWebSocket(priceWss);
 
@@ -44,25 +44,24 @@ setupAdminUpdates(adminWss);
 const userWss = new WebSocket.Server({ noServer: true });
 setupUserUpdates(userWss);
 
-// WebSocket upgrade handling
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url;
-  if (pathname === '/ws/prices') priceWss.handleUpgrade(request, socket, head, (ws) => priceWss.emit('connection', ws, request));
-  else if (pathname === '/ws/balance') balanceWss.handleUpgrade(request, socket, head, (ws) => balanceWss.emit('connection', ws, request));
-  else if (pathname === '/ws/admin') adminWss.handleUpgrade(request, socket, head, (ws) => adminWss.emit('connection', ws, request));
-  else if (pathname === '/ws/user') userWss.handleUpgrade(request, socket, head, (ws) => userWss.emit('connection', ws, request));
+
+  if (pathname === '/ws/prices') priceWss.handleUpgrade(request, socket, head, ws => priceWss.emit('connection', ws, request));
+  else if (pathname === '/ws/balance') balanceWss.handleUpgrade(request, socket, head, ws => balanceWss.emit('connection', ws, request));
+  else if (pathname === '/ws/admin') adminWss.handleUpgrade(request, socket, head, ws => adminWss.emit('connection', ws, request));
+  else if (pathname === '/ws/user') userWss.handleUpgrade(request, socket, head, ws => userWss.emit('connection', ws, request));
   else socket.destroy();
 });
 
-// Security middleware
+// --- Middleware ---
 app.use(helmet());
 
-// CORS configuration
+// CORS
 const allowedOrigins = [
   'https://greenb.lovable.app',
   'https://greebull.onrender.com',
   'https://preview--greenb.lovable.app',
-  'https://id-preview--f7fd61ff-0041-4214-af69-75513e876021.lovable.app',
   'http://localhost:5173',
   'http://localhost:3000',
   process.env.FRONTEND_URL
@@ -78,7 +77,7 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiter
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -90,10 +89,7 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files for uploads
-app.use('/uploads', express.static('uploads'));
-
-// API Routes
+// --- API Routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -103,49 +99,44 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
-app.use('/api/transactions', walletRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Serve frontend build
-const frontendPath = path.join(__dirname, '../dist'); // <- this points to your Vite build output
+// --- Frontend Build Serving ---
+const frontendPath = path.join(__dirname, '../dist'); // <-- Vite build folder
 app.use(express.static(frontendPath));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendPath, 'index.html'));
-});
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error'
+// SPA refresh: serve index.html for all non-API routes
+app.get('*', (req, res) => {
+  // Ignore API calls
+  if (req.path.startsWith('/api')) return res.status(404).json({ success: false, message: 'API endpoint not found' });
+
+  res.sendFile(path.join(frontendPath, 'index.html'), err => {
+    if (err) res.status(500).send(err);
   });
 });
 
-// MongoDB connection
+// --- Error handler ---
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
+});
+
+// --- MongoDB connection ---
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
-    console.log('✅ MongoDB connected successfully');
+    console.log('✅ MongoDB connected');
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
     process.exit(1);
   }
 };
 
-// Start server
+// --- Start server ---
 const PORT = process.env.PORT || 3001;
 
 connectDB().then(() => {
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📡 WebSocket servers:`);
-    console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
-    console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
     startCronJobs();
   });
 });
