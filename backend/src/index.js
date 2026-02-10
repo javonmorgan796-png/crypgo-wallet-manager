@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const http = require('http');
 const WebSocket = require('ws');
+const path = require('path');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -30,26 +31,23 @@ const { startCronJobs } = require('./cron/investmentCron');
 const app = express();
 const server = http.createServer(app);
 
-// WebSocket setup for price updates
+// WebSocket setup
 const priceWss = new WebSocket.Server({ noServer: true });
 setupWebSocket(priceWss);
 
-// WebSocket setup for balance updates
 const balanceWss = new WebSocket.Server({ noServer: true });
 setupBalanceWebSocket(balanceWss);
 
-// WebSocket setup for admin updates
 const adminWss = new WebSocket.Server({ noServer: true });
 setupAdminUpdates(adminWss);
 
-// WebSocket setup for user updates (investments, traders, etc.)
 const userWss = new WebSocket.Server({ noServer: true });
 setupUserUpdates(userWss);
 
 // Handle WebSocket upgrade requests
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url;
-  
+
   if (pathname === '/ws/prices') {
     priceWss.handleUpgrade(request, socket, head, (ws) => {
       priceWss.emit('connection', ws, request);
@@ -74,7 +72,7 @@ server.on('upgrade', (request, socket, head) => {
 // Security middleware
 app.use(helmet());
 
-// CORS configuration for multiple origins
+// CORS configuration
 const allowedOrigins = [
   'https://greenb.lovable.app',
   'https://greebull.onrender.com',
@@ -87,28 +85,18 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    // Check if origin is in allowed list or matches Lovable preview pattern
-    const isAllowed = allowedOrigins.includes(origin) || 
-                      origin.includes('lovable.app') ||
-                      origin.includes('lovableproject.com');
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
+    const isAllowed = allowedOrigins.includes(origin) || origin.includes('lovable.app') || origin.includes('lovableproject.com');
+    if (isAllowed) callback(null, true);
+    else callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: { error: 'Too many requests, please try again later.' }
 });
 app.use('/api/', limiter);
@@ -117,7 +105,7 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files for uploads
+// Static uploads
 app.use('/uploads', express.static('uploads'));
 
 // API Routes
@@ -130,8 +118,6 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
-
-// Transactions route (for user transactions)
 app.use('/api/transactions', require('./routes/wallet'));
 
 // Health check
@@ -139,7 +125,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware
+// Serve frontend build
+app.use(express.static(path.join(__dirname, 'client/build')));
+
+// Catch-all for React SPA routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+});
+
+// Error handler (keep at the very end)
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
@@ -171,8 +165,7 @@ connectDB().then(() => {
     console.log(`📡 WebSocket servers available:`);
     console.log(`   - Prices: ws://localhost:${PORT}/ws/prices`);
     console.log(`   - Balance: ws://localhost:${PORT}/ws/balance`);
-    
-    // Start cron jobs for investment maturity and copy trade simulation
+
     startCronJobs();
   });
 });
