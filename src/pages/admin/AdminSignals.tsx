@@ -28,17 +28,10 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Plus,
-  Edit,
-  Trash2,
-  TrendingUp,
-  TrendingDown,
-  Pause,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  RefreshCw
+  Plus, Trash2, TrendingUp, TrendingDown, Pause,
+  CheckCircle, XCircle, Loader2, RefreshCw, CreditCard, Image as ImageIcon
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { FeedbackDialog } from '@/components/ui/success-dialog';
@@ -60,6 +53,18 @@ interface Signal {
   createdAt: string;
 }
 
+interface Subscription {
+  _id: string;
+  user: { _id: string; name: string; email: string };
+  plan: string;
+  price: number;
+  status: string;
+  paymentReceipt?: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt: string;
+}
+
 const defaultSignal = {
   asset: '',
   type: 'buy' as 'buy' | 'sell' | 'hold',
@@ -77,15 +82,19 @@ interface CloseData {
 export function AdminSignals() {
   const { toast } = useToast();
   const [signals, setSignals] = useState<Signal[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState(defaultSignal);
   const [closeData, setCloseData] = useState<CloseData>({ closedPrice: 0, result: 'profit' });
+  const [adminTab, setAdminTab] = useState('signals');
+  const [subFilter, setSubFilter] = useState('pending');
   
-  // Feedback dialog state
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
   const [feedbackTitle, setFeedbackTitle] = useState('');
@@ -112,25 +121,36 @@ export function AdminSignals() {
     }
   };
 
+  const fetchSubscriptions = async () => {
+    try {
+      const result = await api.adminGetSignalSubscriptions(subFilter);
+      if (result.success && result.data) {
+        setSubscriptions(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch subscriptions:', error);
+    }
+  };
+
   useEffect(() => {
     fetchSignals();
+    fetchSubscriptions();
   }, []);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [subFilter]);
 
   const handleCreate = async () => {
     if (!formData.asset || !formData.entryPrice) {
-      toast({
-        title: 'Error',
-        description: 'Asset and entry price are required',
-        variant: 'destructive'
-      });
+      toast({ title: 'Error', description: 'Asset and entry price are required', variant: 'destructive' });
       return;
     }
-
     setIsSubmitting(true);
     try {
       const result = await api.adminCreateSignal(formData);
       if (result.success) {
-        showFeedback('success', 'Signal Created!', `${formData.type.toUpperCase()} signal for ${formData.asset} has been published to all users.`);
+        showFeedback('success', 'Signal Created!', `${formData.type.toUpperCase()} signal for ${formData.asset} has been published.`);
         setShowCreateDialog(false);
         setFormData(defaultSignal);
         fetchSignals();
@@ -146,12 +166,11 @@ export function AdminSignals() {
 
   const handleCloseSignal = async () => {
     if (!selectedSignal || !closeData.closedPrice) return;
-
     setIsSubmitting(true);
     try {
       const result = await api.adminCloseSignal(selectedSignal._id, closeData);
       if (result.success) {
-        showFeedback('success', 'Signal Closed!', `The ${selectedSignal.asset} signal has been closed with ${closeData.result} result.`);
+        showFeedback('success', 'Signal Closed!', `The ${selectedSignal.asset} signal has been closed.`);
         setShowCloseDialog(false);
         setSelectedSignal(null);
         fetchSignals();
@@ -167,11 +186,10 @@ export function AdminSignals() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this signal?')) return;
-
     try {
       const result = await api.adminDeleteSignal(id);
       if (result.success) {
-        showFeedback('success', 'Signal Deleted', 'The signal has been removed successfully.');
+        showFeedback('success', 'Signal Deleted', 'The signal has been removed.');
         fetchSignals();
       } else {
         throw new Error(result.error);
@@ -181,39 +199,60 @@ export function AdminSignals() {
     }
   };
 
+  const handleApproveSubscription = async (id: string) => {
+    try {
+      const result = await api.adminApproveSignalSubscription(id);
+      if (result.success) {
+        showFeedback('success', 'Subscription Approved', 'User now has access to signals.');
+        fetchSubscriptions();
+      }
+    } catch (error: any) {
+      showFeedback('error', 'Failed', error.message);
+    }
+  };
+
+  const handleRejectSubscription = async (id: string) => {
+    const reason = prompt('Rejection reason:');
+    if (!reason) return;
+    try {
+      const result = await api.adminRejectSignalSubscription(id, reason);
+      if (result.success) {
+        showFeedback('success', 'Subscription Rejected', 'User has been notified.');
+        fetchSubscriptions();
+      }
+    } catch (error: any) {
+      showFeedback('error', 'Failed', error.message);
+    }
+  };
+
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'buy':
-        return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'sell':
-        return <TrendingDown className="h-4 w-4 text-red-500" />;
-      default:
-        return <Pause className="h-4 w-4 text-amber-500" />;
+      case 'buy': return <TrendingUp className="h-4 w-4 text-emerald-400" />;
+      case 'sell': return <TrendingDown className="h-4 w-4 text-red-400" />;
+      default: return <Pause className="h-4 w-4 text-amber-400" />;
     }
   };
 
   const getTypeBadge = (type: string) => {
     switch (type) {
-      case 'buy':
-        return <Badge className="bg-green-500/10 text-green-500">BUY</Badge>;
-      case 'sell':
-        return <Badge className="bg-red-500/10 text-red-500">SELL</Badge>;
-      default:
-        return <Badge className="bg-amber-500/10 text-amber-500">HOLD</Badge>;
+      case 'buy': return <Badge className="bg-emerald-500/10 text-emerald-400">BUY</Badge>;
+      case 'sell': return <Badge className="bg-red-500/10 text-red-400">SELL</Badge>;
+      default: return <Badge className="bg-amber-500/10 text-amber-400">HOLD</Badge>;
     }
   };
 
   const getStatusBadge = (status: string, result?: string) => {
-    if (status === 'active') {
-      return <Badge variant="outline" className="border-primary text-primary">ACTIVE</Badge>;
-    }
-    if (result === 'profit') {
-      return <Badge className="bg-green-500/10 text-green-500">PROFIT</Badge>;
-    }
-    if (result === 'loss') {
-      return <Badge className="bg-red-500/10 text-red-500">LOSS</Badge>;
-    }
+    if (status === 'active') return <Badge variant="outline" className="border-primary text-primary">ACTIVE</Badge>;
+    if (result === 'profit') return <Badge className="bg-emerald-500/10 text-emerald-400">PROFIT</Badge>;
+    if (result === 'loss') return <Badge className="bg-red-500/10 text-red-400">LOSS</Badge>;
     return <Badge variant="secondary">CLOSED</Badge>;
+  };
+
+  const planLabels: Record<string, string> = {
+    '1_month': '1 Month',
+    '2_months': '2 Months',
+    '3_months': '3 Months',
+    '6_months': '6 Months'
   };
 
   return (
@@ -221,10 +260,10 @@ export function AdminSignals() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold">Signal Management</h2>
-          <p className="text-muted-foreground">Create and manage trading signals for users</p>
+          <p className="text-muted-foreground">Manage trading signals and subscriptions</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchSignals} disabled={isLoading}>
+          <Button variant="outline" onClick={() => { fetchSignals(); fetchSubscriptions(); }} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -235,104 +274,210 @@ export function AdminSignals() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Signals</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : signals.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No signals created yet. Click "New Signal" to create one.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Asset</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Entry Price</TableHead>
-                  <TableHead>TP / SL</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {signals.map((signal) => (
-                  <TableRow key={signal._id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(signal.type)}
-                        <span className="font-medium">{signal.asset}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getTypeBadge(signal.type)}</TableCell>
-                    <TableCell>${signal.entryPrice.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        {signal.takeProfit && <span className="text-green-500">TP: ${signal.takeProfit}</span>}
-                        {signal.takeProfit && signal.stopLoss && ' / '}
-                        {signal.stopLoss && <span className="text-red-500">SL: ${signal.stopLoss}</span>}
-                        {!signal.takeProfit && !signal.stopLoss && '-'}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(signal.status, signal.result)}</TableCell>
-                    <TableCell>
-                      {signal.profitLoss !== undefined ? (
-                        <span className={signal.profitLoss >= 0 ? 'text-green-500' : 'text-red-500'}>
-                          {signal.profitLoss >= 0 ? '+' : ''}{signal.profitLoss.toFixed(2)}%
-                        </span>
-                      ) : '-'}
-                    </TableCell>
-                    <TableCell>{new Date(signal.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {signal.status === 'active' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedSignal(signal);
-                              setCloseData({ closedPrice: signal.entryPrice, result: 'profit' });
-                              setShowCloseDialog(true);
-                            }}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Close
-                          </Button>
-                        )}
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(signal._id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs value={adminTab} onValueChange={setAdminTab}>
+        <TabsList>
+          <TabsTrigger value="signals">Signals</TabsTrigger>
+          <TabsTrigger value="subscriptions" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Subscriptions
+            {subscriptions.filter(s => s.status === 'pending').length > 0 && (
+              <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                {subscriptions.filter(s => s.status === 'pending').length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="signals">
+          <Card>
+            <CardHeader>
+              <CardTitle>All Signals</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : signals.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  No signals created yet.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Asset</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Entry Price</TableHead>
+                      <TableHead>TP / SL</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Result</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {signals.map((signal) => (
+                      <TableRow key={signal._id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getTypeIcon(signal.type)}
+                            <span className="font-medium">{signal.asset}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getTypeBadge(signal.type)}</TableCell>
+                        <TableCell>${signal.entryPrice.toLocaleString()}</TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {signal.takeProfit && <span className="text-emerald-400">TP: ${signal.takeProfit}</span>}
+                            {signal.takeProfit && signal.stopLoss && ' / '}
+                            {signal.stopLoss && <span className="text-red-400">SL: ${signal.stopLoss}</span>}
+                            {!signal.takeProfit && !signal.stopLoss && '-'}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(signal.status, signal.result)}</TableCell>
+                        <TableCell>
+                          {signal.profitLoss !== undefined ? (
+                            <span className={signal.profitLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                              {signal.profitLoss >= 0 ? '+' : ''}{signal.profitLoss.toFixed(2)}%
+                            </span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>{new Date(signal.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {signal.status === 'active' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedSignal(signal);
+                                  setCloseData({ closedPrice: signal.entryPrice, result: 'profit' });
+                                  setShowCloseDialog(true);
+                                }}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Close
+                              </Button>
+                            )}
+                            <Button variant="destructive" size="sm" onClick={() => handleDelete(signal._id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="subscriptions">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Signal Subscriptions</CardTitle>
+                <Select value={subFilter} onValueChange={setSubFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {subscriptions.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  No {subFilter} subscriptions found.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Receipt</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {subscriptions.map((sub) => (
+                      <TableRow key={sub._id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{sub.user?.name}</p>
+                            <p className="text-xs text-muted-foreground">{sub.user?.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{planLabels[sub.plan] || sub.plan}</TableCell>
+                        <TableCell>${sub.price}</TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            sub.status === 'active' ? 'default' :
+                            sub.status === 'pending' ? 'secondary' : 'destructive'
+                          }>
+                            {sub.status.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {sub.paymentReceipt ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedReceipt(sub.paymentReceipt!);
+                                setShowReceiptDialog(true);
+                              }}
+                            >
+                              <ImageIcon className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{new Date(sub.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                          {sub.status === 'pending' && (
+                            <div className="flex items-center justify-end gap-2">
+                              <Button size="sm" onClick={() => handleApproveSubscription(sub._id)}>
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Approve
+                              </Button>
+                              <Button variant="destructive" size="sm" onClick={() => handleRejectSubscription(sub._id)}>
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Create Signal Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Signal</DialogTitle>
-            <DialogDescription>
-              Create a new trading signal that will be sent to all users
-            </DialogDescription>
+            <DialogDescription>Create a new trading signal sent to all subscribed users</DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -345,13 +490,8 @@ export function AdminSignals() {
               </div>
               <div className="space-y-2">
                 <Label>Signal Type</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value: 'buy' | 'sell' | 'hold') => setFormData({ ...formData, type: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={formData.type} onValueChange={(value: 'buy' | 'sell' | 'hold') => setFormData({ ...formData, type: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="buy">BUY</SelectItem>
                     <SelectItem value="sell">SELL</SelectItem>
@@ -360,53 +500,27 @@ export function AdminSignals() {
                 </Select>
               </div>
             </div>
-            
             <div className="space-y-2">
               <Label>Entry Price ($)</Label>
-              <Input
-                type="number"
-                placeholder="0.00"
-                value={formData.entryPrice || ''}
-                onChange={(e) => setFormData({ ...formData, entryPrice: parseFloat(e.target.value) })}
-              />
+              <Input type="number" placeholder="0.00" value={formData.entryPrice || ''} onChange={(e) => setFormData({ ...formData, entryPrice: parseFloat(e.target.value) })} />
             </div>
-            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Take Profit ($)</Label>
-                <Input
-                  type="number"
-                  placeholder="Optional"
-                  value={formData.takeProfit || ''}
-                  onChange={(e) => setFormData({ ...formData, takeProfit: parseFloat(e.target.value) })}
-                />
+                <Input type="number" placeholder="Optional" value={formData.takeProfit || ''} onChange={(e) => setFormData({ ...formData, takeProfit: parseFloat(e.target.value) })} />
               </div>
               <div className="space-y-2">
                 <Label>Stop Loss ($)</Label>
-                <Input
-                  type="number"
-                  placeholder="Optional"
-                  value={formData.stopLoss || ''}
-                  onChange={(e) => setFormData({ ...formData, stopLoss: parseFloat(e.target.value) })}
-                />
+                <Input type="number" placeholder="Optional" value={formData.stopLoss || ''} onChange={(e) => setFormData({ ...formData, stopLoss: parseFloat(e.target.value) })} />
               </div>
             </div>
-            
             <div className="space-y-2">
               <Label>Notes (Optional)</Label>
-              <Textarea
-                placeholder="Additional notes or analysis..."
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
-              />
+              <Textarea placeholder="Additional notes..." value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} />
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Signal'}
             </Button>
@@ -419,30 +533,17 @@ export function AdminSignals() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Close Signal</DialogTitle>
-            <DialogDescription>
-              Close the {selectedSignal?.asset} signal and record the result
-            </DialogDescription>
+            <DialogDescription>Close the {selectedSignal?.asset} signal</DialogDescription>
           </DialogHeader>
-          
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Closed Price ($)</Label>
-              <Input
-                type="number"
-                value={closeData.closedPrice || ''}
-                onChange={(e) => setCloseData({ ...closeData, closedPrice: parseFloat(e.target.value) })}
-              />
+              <Input type="number" value={closeData.closedPrice || ''} onChange={(e) => setCloseData({ ...closeData, closedPrice: parseFloat(e.target.value) })} />
             </div>
-            
             <div className="space-y-2">
               <Label>Result</Label>
-              <Select
-                value={closeData.result}
-                onValueChange={(value: 'profit' | 'loss' | 'breakeven') => setCloseData({ ...closeData, result: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={closeData.result} onValueChange={(value: 'profit' | 'loss' | 'breakeven') => setCloseData({ ...closeData, result: value })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="profit">Profit</SelectItem>
                   <SelectItem value="loss">Loss</SelectItem>
@@ -451,11 +552,8 @@ export function AdminSignals() {
               </Select>
             </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCloseDialog(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setShowCloseDialog(false)}>Cancel</Button>
             <Button onClick={handleCloseSignal} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Close Signal'}
             </Button>
@@ -463,14 +561,21 @@ export function AdminSignals() {
         </DialogContent>
       </Dialog>
 
-      {/* Feedback Dialog */}
-      <FeedbackDialog
-        open={feedbackOpen}
-        onOpenChange={setFeedbackOpen}
-        type={feedbackType}
-        title={feedbackTitle}
-        message={feedbackMessage}
-      />
+      {/* Receipt Dialog */}
+      <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Payment Receipt</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-4">
+            {selectedReceipt && (
+              <img src={selectedReceipt} alt="Payment receipt" className="max-w-full max-h-96 rounded-lg object-contain" />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} type={feedbackType} title={feedbackTitle} message={feedbackMessage} />
     </div>
   );
 }
