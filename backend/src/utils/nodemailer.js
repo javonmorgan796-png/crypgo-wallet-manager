@@ -30,7 +30,7 @@ const transporter = createTransporter();
 const sendEmail = async ({ to, subject, html, text }) => {
   try {
     const info = await transporter.sendMail({
-      from: `"GreenBull Trading" <${process.env.FROM_EMAIL || process.env.EMAIL_USER || 'noreply@greenbull.com'}>`,
+      from: `"GreenBull Trading" <greenbull848@gmail.com>`,
       to,
       subject,
       text,

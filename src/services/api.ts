@@ -458,6 +458,51 @@ class ApiService {
     return this.request<any[]>(`/signals?status=${status}`);
   }
 
+  async getSignalPlans() {
+    return this.request<any[]>('/signals/plans');
+  }
+
+  async getSignalSubscription() {
+    return this.request<{ hasAccess: boolean; subscription: any }>('/signals/subscription');
+  }
+
+  async subscribeToSignals(plan: string, receipt?: File) {
+    const formData = new FormData();
+    formData.append('plan', plan);
+    if (receipt) {
+      formData.append('receipt', receipt);
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/signals/subscribe`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+        body: formData,
+      });
+      return response.json();
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async adminGetSignalSubscriptions(status?: string) {
+    const params = status ? `?status=${status}` : '';
+    return this.request<any[]>(`/signals/admin/subscriptions${params}`);
+  }
+
+  async adminApproveSignalSubscription(id: string) {
+    return this.request(`/signals/admin/subscriptions/${id}/approve`, { method: 'POST' });
+  }
+
+  async adminRejectSignalSubscription(id: string, reason: string) {
+    return this.request(`/signals/admin/subscriptions/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
   async adminGetSignals() {
     return this.request<any[]>('/signals/admin');
   }
