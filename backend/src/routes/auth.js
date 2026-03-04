@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const User = require('../models/User');
-const { generateToken, protect } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const { sendEmail, emailTemplates } = require('../utils/nodemailer');
 
 const router = express.Router();
@@ -15,7 +15,6 @@ router.post('/signup', async (req, res, next) => {
   try {
     const { name, email, password, referralCode } = req.body;
     
-    // Check if user exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -24,26 +23,22 @@ router.post('/signup', async (req, res, next) => {
       });
     }
     
-    // Check referral code
     let referrer = null;
     if (referralCode) {
       referrer = await User.findOne({ referralCode });
     }
     
-    // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
     
-    // Create user
     const user = await User.create({
       name,
       email,
       password,
       verificationToken,
-      verificationTokenExpires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+      verificationTokenExpires: Date.now() + 24 * 60 * 60 * 1000,
       referredBy: referrer?._id
     });
     
-    // Send verification email
     const verificationUrl = `${FRONTEND_URL}/verify-email?token=${verificationToken}`;
     const emailTemplate = emailTemplates.verification(name, verificationUrl);
     await sendEmail({
@@ -83,7 +78,6 @@ router.post('/login', async (req, res, next) => {
       });
     }
     
-    // Check if account is locked
     if (user.isLocked()) {
       const lockTimeRemaining = Math.ceil((user.lockUntil - Date.now()) / 60000);
       return res.status(423).json({
@@ -92,7 +86,6 @@ router.post('/login', async (req, res, next) => {
       });
     }
     
-    // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       await user.incrementLoginAttempts();
@@ -102,7 +95,6 @@ router.post('/login', async (req, res, next) => {
       });
     }
     
-    // Reset login attempts on successful login
     await user.resetLoginAttempts();
     
     // Auto-promote admin based on environment variable
@@ -117,21 +109,21 @@ router.post('/login', async (req, res, next) => {
     
     // Check if 2FA is enabled
     if (user.is2FAEnabled) {
+      // Store userId in session temporarily for 2FA verification
+      req.session.pending2FAUserId = user._id.toString();
       return res.json({
         success: true,
-        requires2FA: true,
-        tempToken: generateToken(user._id) // Short-lived token for 2FA verification
+        requires2FA: true
       });
     }
     
-    // Generate token
-    const token = generateToken(user._id);
+    // Set session
+    req.session.userId = user._id.toString();
     
     res.json({
       success: true,
       isAdmin: user.role === 'admin',
       data: {
-        token,
         user: {
           id: user._id,
           name: user.name,
@@ -145,6 +137,51 @@ router.post('/login', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// Logout
+router.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Logout failed' });
+    }
+    res.clearCookie('connect.sid');
+    res.json({ success: true, message: 'Logged out successfully' });
+  });
+});
+
+// Check session (replaces token validation)
+router.get('/session', async (req, res) => {
+  if (!req.session || !req.session.userId) {
+    return res.json({ success: false, message: 'No active session' });
+  }
+
+  try {
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      req.session.destroy();
+      return res.json({ success: false, message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        is2FAEnabled: user.is2FAEnabled,
+        kycStatus: user.kycStatus,
+        balance: user.balance,
+        referralCode: user.referralCode,
+        avatar: user.avatar,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    res.json({ success: false, message: 'Session check failed' });
   }
 });
 
@@ -187,20 +224,17 @@ router.post('/forgot-password', async (req, res, next) => {
     const user = await User.findOne({ email });
     
     if (!user) {
-      // Don't reveal if user exists
       return res.json({
         success: true,
         message: 'If an account exists with this email, you will receive a password reset link.'
       });
     }
     
-    // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
     user.passwordResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.passwordResetExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+    user.passwordResetExpires = Date.now() + 60 * 60 * 1000;
     await user.save();
     
-    // Send reset email
     const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
     const emailTemplate = emailTemplates.passwordReset(user.name, resetUrl);
     await sendEmail({
@@ -242,7 +276,6 @@ router.post('/reset-password', async (req, res, next) => {
     user.passwordResetExpires = undefined;
     await user.save();
     
-    // Send confirmation email
     const emailTemplate = emailTemplates.passwordChanged(user.name);
     await sendEmail({
       to: user.email,
@@ -267,11 +300,9 @@ router.post('/2fa/enable', protect, async (req, res, next) => {
       length: 20
     });
     
-    // Save secret temporarily (not enabled yet)
     req.user.twoFactorSecret = secret.base32;
     await req.user.save();
     
-    // Generate QR code
     const qrCode = await QRCode.toDataURL(secret.otpauth_url);
     
     res.json({
@@ -287,13 +318,24 @@ router.post('/2fa/enable', protect, async (req, res, next) => {
 });
 
 // Verify 2FA (during login or enabling)
-router.post('/2fa/verify', protect, async (req, res, next) => {
+router.post('/2fa/verify', async (req, res, next) => {
   try {
     const { code } = req.body;
     
-    const user = await User.findById(req.user._id).select('+twoFactorSecret');
+    // If user is already authenticated (enabling 2FA), use session userId
+    // If pending 2FA login, use pending2FAUserId
+    const userId = req.session?.userId || req.session?.pending2FAUserId;
     
-    if (!user.twoFactorSecret) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'No pending 2FA verification'
+      });
+    }
+    
+    const user = await User.findById(userId).select('+twoFactorSecret');
+    
+    if (!user || !user.twoFactorSecret) {
       return res.status(400).json({
         success: false,
         message: '2FA not configured'
@@ -320,9 +362,26 @@ router.post('/2fa/verify', protect, async (req, res, next) => {
       await user.save();
     }
     
+    // If this was a login 2FA verification, set the real session
+    if (req.session.pending2FAUserId) {
+      req.session.userId = req.session.pending2FAUserId;
+      delete req.session.pending2FAUserId;
+    }
+    
     res.json({
       success: true,
-      message: '2FA verified successfully'
+      message: '2FA verified successfully',
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isVerified: user.isVerified,
+          is2FAEnabled: user.is2FAEnabled,
+          kycStatus: user.kycStatus
+        }
+      }
     });
   } catch (error) {
     next(error);

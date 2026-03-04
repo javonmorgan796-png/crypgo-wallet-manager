@@ -1,32 +1,34 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import mongoose from 'mongoose';
-import http from 'http';
-import { WebSocketServer } from 'ws';
-import path from 'path';
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const mongoose = require('mongoose');
+const http = require('http');
+const { WebSocketServer } = require('ws');
+const path = require('path');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
 
 // Import API routes
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/user.js';
-import walletRoutes from './routes/wallet.js';
-import kycRoutes from './routes/kyc.js';
-import adminRoutes from './routes/admin.js';
-import notificationRoutes from './routes/notifications.js';
-import investmentRoutes from './routes/investments.js';
-import copyTradeRoutes from './routes/copyTrade.js';
-import signalRoutes from './routes/signals.js';
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/user');
+const walletRoutes = require('./routes/wallet');
+const kycRoutes = require('./routes/kyc');
+const adminRoutes = require('./routes/admin');
+const notificationRoutes = require('./routes/notifications');
+const investmentRoutes = require('./routes/investments');
+const copyTradeRoutes = require('./routes/copyTrade');
+const signalRoutes = require('./routes/signals');
 
 // Import WebSocket handlers
-import { setupWebSocket } from './websocket/priceUpdates.js';
-import { setupBalanceWebSocket } from './websocket/balanceUpdates.js';
-import { setupAdminUpdates } from './websocket/adminUpdates.js';
-import { setupUserUpdates } from './websocket/userUpdates.js';
+const { setupWebSocket } = require('./websocket/priceUpdates');
+const { setupBalanceWebSocket } = require('./websocket/balanceUpdates');
+const { setupAdminUpdates } = require('./websocket/adminUpdates');
+const { setupUserUpdates } = require('./websocket/userUpdates');
 
 // Import cron jobs
-import { startCronJobs } from './cron/investmentCron.js';
+const { startCronJobs } = require('./cron/investmentCron');
 
 const app = express();
 const server = http.createServer(app);
@@ -65,6 +67,7 @@ app.use(helmet());
 
 const allowedOrigins = [
   'https://greenb.lovable.app',
+  'https://grebull.lovable.app',
   'https://greebull.onrender.com',
   'http://localhost:5173',
   'http://localhost:3000',
@@ -91,6 +94,27 @@ app.use('/api/', limiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Trust proxy for secure cookies behind Render's reverse proxy
+app.set('trust proxy', 1);
+
+// ----------------- Session Setup -----------------
+app.use(session({
+  secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'greenbull-session-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    collectionName: 'sessions',
+    ttl: 7 * 24 * 60 * 60 // 7 days
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  }
+}));
 
 // ----------------- API Routes -----------------
 app.use('/api/auth', authRoutes);
@@ -150,4 +174,4 @@ connectDB().then(() => {
   });
 });
 
-export { app, server };
+module.exports = { app, server };
