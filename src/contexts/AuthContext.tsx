@@ -41,34 +41,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      try {
-        const result = await api.getProfile();
-        if (result.success && result.data) {
-          setUser({
-            id: result.data.id || result.data._id,
-            name: result.data.name,
-            email: result.data.email,
-            role: result.data.role || 'user',
-            isVerified: result.data.isVerified || false,
-            is2FAEnabled: result.data.is2FAEnabled || false,
-            kycStatus: result.data.kycStatus || 'none',
-            balance: result.data.balance || 0,
-            totalProfit: result.data.totalProfit || 0,
-            totalInvested: result.data.totalInvested || 0,
-            avatar: result.data.avatar,
-            referralCode: result.data.referralCode,
-            createdAt: result.data.createdAt,
-          });
-        } else {
-          // Token invalid, clear it
-          api.clearToken();
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        api.clearToken();
+    try {
+      // Check if there's an active session on the server
+      const result = await api.checkSession();
+      if (result.success && result.data) {
+        setUser({
+          id: result.data.id || result.data._id,
+          name: result.data.name,
+          email: result.data.email,
+          role: result.data.role || 'user',
+          isVerified: result.data.isVerified || false,
+          is2FAEnabled: result.data.is2FAEnabled || false,
+          kycStatus: result.data.kycStatus || 'none',
+          balance: result.data.balance || 0,
+          totalProfit: result.data.totalProfit || 0,
+          totalInvested: result.data.totalInvested || 0,
+          avatar: result.data.avatar,
+          referralCode: result.data.referralCode,
+          createdAt: result.data.createdAt,
+        });
       }
+    } catch (error) {
+      console.error('Auth check failed:', error);
     }
     setIsLoading(false);
   };
@@ -83,18 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (result.success && result.data) {
         const responseData = result.data as any;
         
-        // Check for 2FA requirement first
-        if (responseData.requires2FA || responseData.data?.requires2FA) {
+        // Check for 2FA requirement
+        if ((result as any).requires2FA || responseData.requires2FA) {
           setPending2FA(true);
           setIsLoading(false);
           return { success: true, requires2FA: true };
         }
         
-        // Extract user data from various possible response structures
-        // Backend may return different formats depending on response structure
+        // Extract user data
         let userData = null;
-        
-        // Try different response structures
         if (responseData.data?.user) {
           userData = responseData.data.user;
         } else if (responseData.user) {
@@ -111,17 +102,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, error: 'Invalid response from server. Please try again.' };
         }
         
-        // Check 2FA on extracted user data
         if (userData.is2FAEnabled) {
           setPending2FA(true);
           setIsLoading(false);
           return { success: true, requires2FA: true };
         }
         
-        // Trust the server's role - never guess admin status client-side
         const userRole = userData.role || 'user';
         
-        // Set user data from login response
         const userObj: User = {
           id: userData.id || userData._id,
           name: userData.name || email.split('@')[0],
@@ -186,8 +174,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = () => {
-    api.clearToken();
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
     setUser(null);
     setPending2FA(false);
   };

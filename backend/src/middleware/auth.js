@@ -1,50 +1,27 @@
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, JWT_SECRET, {
-    expiresIn: '7d'
-  });
-};
-
-// Verify token middleware
+// Verify session middleware
 const protect = async (req, res, next) => {
   try {
-    let token;
-    
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
-    
-    if (!token) {
+    if (!req.session || !req.session.userId) {
       return res.status(401).json({
         success: false,
-        message: 'Not authorized to access this route'
+        message: 'Not authorized. Please log in.'
       });
     }
-    
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      const user = await User.findById(decoded.id);
-      
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: 'User not found'
-        });
-      }
-      
-      req.user = user;
-      next();
-    } catch (error) {
+
+    const user = await User.findById(req.session.userId);
+
+    if (!user) {
+      req.session.destroy();
       return res.status(401).json({
         success: false,
-        message: 'Token is invalid or expired'
+        message: 'User not found. Session invalid.'
       });
     }
+
+    req.user = user;
+    next();
   } catch (error) {
     next(error);
   }
@@ -72,4 +49,4 @@ const verifiedOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { generateToken, protect, adminOnly, verifiedOnly };
+module.exports = { protect, adminOnly, verifiedOnly };

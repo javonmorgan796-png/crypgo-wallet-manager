@@ -1,5 +1,5 @@
 // API Service for MongoDB Backend on Render.com
-// Connected to live Render backend
+// Connected to live Render backend — uses server-side sessions (cookies)
 
 const RENDER_API_URL = import.meta.env.VITE_RENDER_API_URL || 'https://greenbull-api.onrender.com/api';
 
@@ -11,11 +11,9 @@ interface ApiResponse<T> {
 
 class ApiService {
   private baseUrl: string;
-  private token: string | null = null;
 
   constructor() {
     this.baseUrl = RENDER_API_URL;
-    this.token = localStorage.getItem('auth_token');
   }
 
   private async request<T>(
@@ -27,14 +25,11 @@ class ApiService {
       ...options.headers,
     };
 
-    if (this.token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`;
-    }
-
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
+        credentials: 'include', // Send session cookie with every request
       });
 
       const responseData = await response.json();
@@ -43,8 +38,6 @@ class ApiService {
         return { success: false, error: responseData.message || 'Request failed' };
       }
 
-      // Backend already returns { success: true, data: ... } format
-      // Return the response as-is if it has success field, otherwise wrap it
       if (responseData && typeof responseData.success === 'boolean') {
         return responseData;
       }
@@ -56,16 +49,6 @@ class ApiService {
     }
   }
 
-  setToken(token: string) {
-    this.token = token;
-    localStorage.setItem('auth_token', token);
-  }
-
-  clearToken() {
-    this.token = null;
-    localStorage.removeItem('auth_token');
-  }
-
   // Authentication
   async login(email: string, password: string) {
     const result = await this.request<any>('/auth/login', {
@@ -74,16 +57,12 @@ class ApiService {
     });
 
     if (result.success && result.data) {
-      // Handle nested response structure from backend
-      // Backend returns: { success: true, isAdmin: boolean, data: { token, user } }
-      const responseData = result.data;
-      const token = responseData.token || responseData.data?.token;
-      
-      if (token) {
-        this.setToken(token);
+      const responseData = result.data as any;
+
+      if (responseData.requires2FA || responseData.data?.requires2FA) {
+        return { ...result, requires2FA: true };
       }
-      
-      // Return isAdmin from server response
+
       return {
         ...result,
         isAdmin: responseData.isAdmin === true
@@ -94,10 +73,18 @@ class ApiService {
   }
 
   async signup(name: string, email: string, password: string, referralCode?: string) {
-    return this.request<{ token: string; user: any }>('/auth/signup', {
+    return this.request<{ user: any }>('/auth/signup', {
       method: 'POST',
       body: JSON.stringify({ name, email, password, referralCode }),
     });
+  }
+
+  async logout() {
+    return this.request('/auth/logout', { method: 'POST' });
+  }
+
+  async checkSession() {
+    return this.request<any>('/auth/session');
   }
 
   async verifyEmail(token: string) {
@@ -172,9 +159,7 @@ class ApiService {
   async submitKYC(formData: FormData) {
     const response = await fetch(`${this.baseUrl}/kyc/submit`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-      },
+      credentials: 'include',
       body: formData,
     });
     return response.json();
@@ -200,9 +185,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseUrl}/wallet/deposit`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        credentials: 'include',
         body: formData,
       });
       
@@ -237,8 +220,6 @@ class ApiService {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
     if (filters?.dateTo) params.append('dateTo', filters.dateTo);
-
-    // User transactions are at /wallet/transactions endpoint
     return this.request<any[]>(`/wallet/transactions?${params.toString()}`);
   }
 
@@ -476,9 +457,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseUrl}/signals/subscribe`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-        },
+        credentials: 'include',
         body: formData,
       });
       return response.json();
@@ -503,6 +482,7 @@ class ApiService {
     });
   }
 
+  // Admin: Signal management
   async adminGetSignals() {
     return this.request<any[]>('/signals/admin');
   }
@@ -533,7 +513,19 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Admin: Settings
+  async adminGetSettings() {
+    return this.request<any>('/admin/settings');
+  }
+
+  async adminUpdateSettings(data: any) {
+    return this.request('/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
-export const api = new ApiService();
+const api = new ApiService();
 export default api;
