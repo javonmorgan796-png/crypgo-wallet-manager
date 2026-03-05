@@ -120,20 +120,27 @@ router.post('/login', async (req, res, next) => {
     // Set session
     req.session.userId = user._id.toString();
     
-    res.json({
-      success: true,
-      isAdmin: user.role === 'admin',
-      data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          isVerified: user.isVerified,
-          is2FAEnabled: user.is2FAEnabled,
-          kycStatus: user.kycStatus
-        }
+    // Save session and return sessionId for cross-origin fallback
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
       }
+      res.json({
+        success: true,
+        isAdmin: user.role === 'admin',
+        sessionId: req.sessionID,
+        data: {
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            isVerified: user.isVerified,
+            is2FAEnabled: user.is2FAEnabled,
+            kycStatus: user.kycStatus
+          }
+        }
+      });
     });
   } catch (error) {
     next(error);
@@ -166,6 +173,7 @@ router.get('/session', async (req, res) => {
 
     res.json({
       success: true,
+      sessionId: req.sessionID,
       data: {
         id: user._id,
         name: user.name,
