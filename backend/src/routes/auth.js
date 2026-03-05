@@ -171,9 +171,11 @@ router.get('/session', async (req, res) => {
       return res.json({ success: false, message: 'User not found' });
     }
 
+    const activeSessionId = req.sessionSourceId || req.sessionID;
+
     res.json({
       success: true,
-      sessionId: req.sessionID,
+      sessionId: activeSessionId,
       data: {
         id: user._id,
         name: user.name,
@@ -370,14 +372,35 @@ router.post('/2fa/verify', async (req, res, next) => {
       await user.save();
     }
     
-    // If this was a login 2FA verification, set the real session
+    // If this was a login 2FA verification, set and persist the real session
     if (req.session.pending2FAUserId) {
       req.session.userId = req.session.pending2FAUserId;
       delete req.session.pending2FAUserId;
+
+      return req.session.save((err) => {
+        if (err) return next(err);
+        res.json({
+          success: true,
+          sessionId: req.sessionID,
+          message: '2FA verified successfully',
+          data: {
+            user: {
+              id: user._id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              isVerified: user.isVerified,
+              is2FAEnabled: user.is2FAEnabled,
+              kycStatus: user.kycStatus
+            }
+          }
+        });
+      });
     }
-    
+
     res.json({
       success: true,
+      sessionId: req.sessionID,
       message: '2FA verified successfully',
       data: {
         user: {
