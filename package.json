@@ -4,15 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
-    "dev:frontend": "cd src && npm install && vite",
-    "dev:backend": "cd backend && npm install && nodemon src/index.js",
-    "build:frontend": "cd src && npm install && vite build",
-    "build:backend": "echo 'Backend does not require build step'",
-    "build": "npm run build:frontend && npm run build:backend",
+    "dev": "vite",
+    "build": "vite build",
+    "build:dev": "vite build",
     "start": "node backend/src/index.js",
     "lint": "eslint .",
-    "preview": "cd src && vite preview"
+    "preview": "vite preview"
   },
   "dependencies": {
     "express": "^4.18.2",
