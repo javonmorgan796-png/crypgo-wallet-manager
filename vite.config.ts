@@ -4,14 +4,12 @@ import path from 'path';
 import { componentTagger } from 'lovable-tagger';
 
 export default defineConfig(({ mode }) => ({
-  root: path.resolve(__dirname, 'src'), // <--- FRONTEND ROOT
-  base: './', // important for deploy
   server: {
     host: '::',
     port: 8080,
   },
   build: {
-    outDir: path.resolve(__dirname, 'backend/dist'), // <--- output for backend
+    outDir: 'dist',
     emptyOutDir: true,
   },
   plugins: [react(), mode === 'development' && componentTagger()].filter(Boolean),
