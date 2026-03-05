@@ -121,30 +121,32 @@ app.use(sessionMiddleware);
 
 // Fallback: If cookie-based session fails (cross-origin), use x-session-id header
 app.use(async (req, res, next) => {
-  // If session already has userId from cookie, continue
-  if (req.session && req.session.userId) {
+  if (req.session?.userId) {
     return next();
   }
-  
-  // Check for x-session-id header as fallback
+
   const headerSessionId = req.headers['x-session-id'];
-  if (headerSessionId) {
-    try {
-      const sessionData = await new Promise((resolve, reject) => {
-        sessionStore.get(headerSessionId, (err, session) => {
-          if (err) reject(err);
-          else resolve(session);
-        });
-      });
-      
-      if (sessionData && sessionData.userId) {
-        req.session.userId = sessionData.userId;
-      }
-    } catch (err) {
-      console.error('Header session lookup failed:', err);
-    }
+  if (!headerSessionId || typeof headerSessionId !== 'string') {
+    return next();
   }
-  
+
+  try {
+    const sessionData = await new Promise((resolve, reject) => {
+      sessionStore.get(headerSessionId, (err, session) => {
+        if (err) reject(err);
+        else resolve(session);
+      });
+    });
+
+    if (sessionData) {
+      req.session.userId = sessionData.userId;
+      req.session.pending2FAUserId = sessionData.pending2FAUserId;
+      req.sessionSourceId = headerSessionId;
+    }
+  } catch (err) {
+    console.error('Header session lookup failed:', err);
+  }
+
   next();
 });
 

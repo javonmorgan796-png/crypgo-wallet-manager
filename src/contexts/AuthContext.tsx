@@ -81,19 +81,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const result = await api.login(email, password);
-      
+      const resultPayload = result as any;
+
       console.log('Login API response:', JSON.stringify(result, null, 2));
-      
-      if (result.success && result.data) {
-        const responseData = result.data as any;
-        
-        // Check for 2FA requirement
-        if ((result as any).requires2FA || responseData.requires2FA) {
+
+      if (result.success) {
+        // Check for 2FA requirement before expecting user payload
+        if (resultPayload.requires2FA) {
           setPending2FA(true);
           setIsLoading(false);
           return { success: true, requires2FA: true };
         }
-        
+
+        const responseData = resultPayload.data ?? resultPayload;
+
         // Extract user data
         let userData = null;
         if (responseData.data?.user) {
@@ -105,21 +106,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (responseData.id || responseData._id) {
           userData = responseData;
         }
-        
+
         if (!userData) {
           console.error('Could not extract user data from response:', result.data);
           setIsLoading(false);
           return { success: false, error: 'Invalid response from server. Please try again.' };
         }
-        
+
         if (userData.is2FAEnabled) {
           setPending2FA(true);
           setIsLoading(false);
           return { success: true, requires2FA: true };
         }
-        
+
         const userRole = userData.role || 'user';
-        
+
         const userObj: User = {
           id: userData.id || userData._id,
           name: userData.name || email.split('@')[0],
@@ -135,12 +136,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           referralCode: userData.referralCode,
           createdAt: userData.createdAt || new Date().toISOString(),
         };
-        
+
         setUser(userObj);
         setIsLoading(false);
         return { success: true, isAdmin: userRole === 'admin' };
       }
-      
+
       setIsLoading(false);
       return { success: false, error: result.error || 'Login failed. Please check your credentials.' };
     } catch (error) {

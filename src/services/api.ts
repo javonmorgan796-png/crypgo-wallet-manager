@@ -28,6 +28,13 @@ class ApiService {
     localStorage.removeItem('sessionId');
   }
 
+  private syncSessionIdFromResponse(payload: any) {
+    const sessionId = payload?.sessionId;
+    if (typeof sessionId === 'string' && sessionId.length > 0) {
+      this.setSessionId(sessionId);
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -37,7 +44,6 @@ class ApiService {
       ...options.headers,
     };
 
-    // Add session ID header for cross-origin fallback
     const sessionId = this.getSessionId();
     if (sessionId) {
       (headers as Record<string, string>)['x-session-id'] = sessionId;
@@ -47,13 +53,20 @@ class ApiService {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
-        credentials: 'include', // Still try cookies first
+        credentials: 'include',
       });
 
-      const responseData = await response.json();
+      let responseData: any = null;
+      try {
+        responseData = await response.json();
+      } catch {
+        responseData = null;
+      }
+
+      this.syncSessionIdFromResponse(responseData);
 
       if (!response.ok) {
-        return { success: false, error: responseData.message || 'Request failed' };
+        return { success: false, error: responseData?.message || 'Request failed' };
       }
 
       if (responseData && typeof responseData.success === 'boolean') {
@@ -74,21 +87,22 @@ class ApiService {
       body: JSON.stringify({ email, password }),
     });
 
-    if (result.success && result.data) {
-      const responseData = result.data as any;
+    const resultPayload = result as any;
+    this.syncSessionIdFromResponse(resultPayload);
 
-      // Store sessionId for cross-origin session persistence
-      if (responseData.sessionId) {
-        this.setSessionId(responseData.sessionId);
-      }
+    if (result.success) {
+      const responseData = resultPayload.data ?? resultPayload;
 
-      if (responseData.requires2FA || responseData.data?.requires2FA) {
+      if (resultPayload.requires2FA || responseData?.requires2FA) {
         return { ...result, requires2FA: true };
       }
 
       return {
         ...result,
-        isAdmin: responseData.isAdmin === true
+        isAdmin:
+          resultPayload.isAdmin === true ||
+          responseData?.role === 'admin' ||
+          responseData?.user?.role === 'admin',
       };
     }
 
@@ -109,7 +123,11 @@ class ApiService {
   }
 
   async checkSession() {
-    return this.request<any>('/auth/session');
+    const result = await this.request<any>('/auth/session');
+    if (!result.success) {
+      this.clearSessionId();
+    }
+    return result;
   }
 
   async verifyEmail(token: string) {
