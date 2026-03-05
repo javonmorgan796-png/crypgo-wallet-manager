@@ -16,6 +16,18 @@ class ApiService {
     this.baseUrl = RENDER_API_URL;
   }
 
+  private getSessionId(): string | null {
+    return localStorage.getItem('sessionId');
+  }
+
+  private setSessionId(sessionId: string) {
+    localStorage.setItem('sessionId', sessionId);
+  }
+
+  clearSessionId() {
+    localStorage.removeItem('sessionId');
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -25,11 +37,17 @@ class ApiService {
       ...options.headers,
     };
 
+    // Add session ID header for cross-origin fallback
+    const sessionId = this.getSessionId();
+    if (sessionId) {
+      (headers as Record<string, string>)['x-session-id'] = sessionId;
+    }
+
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
-        credentials: 'include', // Send session cookie with every request
+        credentials: 'include', // Still try cookies first
       });
 
       const responseData = await response.json();
@@ -59,6 +77,11 @@ class ApiService {
     if (result.success && result.data) {
       const responseData = result.data as any;
 
+      // Store sessionId for cross-origin session persistence
+      if (responseData.sessionId) {
+        this.setSessionId(responseData.sessionId);
+      }
+
       if (responseData.requires2FA || responseData.data?.requires2FA) {
         return { ...result, requires2FA: true };
       }
@@ -80,7 +103,9 @@ class ApiService {
   }
 
   async logout() {
-    return this.request('/auth/logout', { method: 'POST' });
+    const result = await this.request('/auth/logout', { method: 'POST' });
+    this.clearSessionId();
+    return result;
   }
 
   async checkSession() {

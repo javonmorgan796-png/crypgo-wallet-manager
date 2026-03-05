@@ -45,20 +45,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Check if there's an active session on the server
       const result = await api.checkSession();
       if (result.success && result.data) {
+        const responseData = result.data as any;
+        
+        // Store sessionId if returned (for cross-origin persistence)
+        if (responseData.sessionId) {
+          localStorage.setItem('sessionId', responseData.sessionId);
+        } else if ((result as any).sessionId) {
+          localStorage.setItem('sessionId', (result as any).sessionId);
+        }
+
+        const userData = responseData.data || responseData;
         setUser({
-          id: result.data.id || result.data._id,
-          name: result.data.name,
-          email: result.data.email,
-          role: result.data.role || 'user',
-          isVerified: result.data.isVerified || false,
-          is2FAEnabled: result.data.is2FAEnabled || false,
-          kycStatus: result.data.kycStatus || 'none',
-          balance: result.data.balance || 0,
-          totalProfit: result.data.totalProfit || 0,
-          totalInvested: result.data.totalInvested || 0,
-          avatar: result.data.avatar,
-          referralCode: result.data.referralCode,
-          createdAt: result.data.createdAt,
+          id: userData.id || userData._id,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role || 'user',
+          isVerified: userData.isVerified || false,
+          is2FAEnabled: userData.is2FAEnabled || false,
+          kycStatus: userData.kycStatus || 'none',
+          balance: userData.balance || 0,
+          totalProfit: userData.totalProfit || 0,
+          totalInvested: userData.totalInvested || 0,
+          avatar: userData.avatar,
+          referralCode: userData.referralCode,
+          createdAt: userData.createdAt,
         });
       }
     } catch (error) {
@@ -180,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     }
+    api.clearSessionId();
     setUser(null);
     setPending2FA(false);
   };
