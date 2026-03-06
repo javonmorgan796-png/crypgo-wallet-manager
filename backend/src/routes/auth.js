@@ -25,6 +25,89 @@ const setSessionIdHeader = (res, sessionId) => {
   }
 };
 
+const normalizeSessionId = (rawSessionId) => {
+  const rawValue = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+  if (typeof rawValue !== 'string') return null;
+
+  let normalized = rawValue.trim();
+  if (!normalized) return null;
+
+  try {
+    normalized = decodeURIComponent(normalized);
+  } catch {
+    // Keep raw value if decode fails
+  }
+
+  normalized = normalized.replace(/^"|"$/g, '');
+  if (normalized.startsWith('s:')) {
+    normalized = normalized.slice(2);
+  }
+
+  if (normalized.includes('.')) {
+    normalized = normalized.split('.')[0];
+  }
+
+  if (normalized.startsWith('sess:')) {
+    normalized = normalized.slice(5);
+  }
+
+  return normalized || null;
+};
+
+const hydrateSessionFromHeader = async (req, res) => {
+  const normalizedSessionId = normalizeSessionId(req.headers['x-session-id']);
+  if (!normalizedSessionId || !req.sessionStore) {
+    return false;
+  }
+
+  const sessionCandidates = [...new Set([normalizedSessionId, `sess:${normalizedSessionId}`])];
+
+  for (const sessionCandidate of sessionCandidates) {
+    const sessionData = await new Promise((resolve, reject) => {
+      req.sessionStore.get(sessionCandidate, (err, session) => {
+        if (err) reject(err);
+        else resolve(session || null);
+      });
+    });
+
+    if (sessionData?.userId || sessionData?.pending2FAUserId) {
+      if (sessionData.userId) {
+        req.session.userId = sessionData.userId;
+      }
+
+      if (sessionData.pending2FAUserId) {
+        req.session.pending2FAUserId = sessionData.pending2FAUserId;
+      }
+
+      req.sessionSourceId = sessionCandidate.replace(/^sess:/, '');
+      setSessionIdHeader(res, req.sessionSourceId);
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const persistSession = (req, res, next, sessionValues, responseBuilder) => {
+  req.session.regenerate((regenerateError) => {
+    if (regenerateError) {
+      return next(regenerateError);
+    }
+
+    Object.assign(req.session, sessionValues);
+
+    req.session.save((saveError) => {
+      if (saveError) {
+        return next(saveError);
+      }
+
+      const activeSessionId = req.sessionID;
+      setSessionIdHeader(res, activeSessionId);
+      return res.json(responseBuilder(activeSessionId));
+    });
+  });
+};
+
 // Sign Up
 router.post('/signup', async (req, res, next) => {
   try {
@@ -83,16 +166,16 @@ router.post('/signup', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    
+
     const user = await User.findOne({ email }).select('+password +twoFactorSecret');
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
     }
-    
+
     if (user.isLocked()) {
       const lockTimeRemaining = Math.ceil((user.lockUntil - Date.now()) / 60000);
       return res.status(423).json({
@@ -100,7 +183,7 @@ router.post('/login', async (req, res, next) => {
         message: `Account is temporarily locked due to too many failed login attempts. Please try again in ${lockTimeRemaining} minutes.`
       });
     }
-    
+
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       await user.incrementLoginAttempts();
@@ -109,9 +192,9 @@ router.post('/login', async (req, res, next) => {
         message: 'Invalid email or password'
       });
     }
-    
+
     await user.resetLoginAttempts();
-    
+
     // Auto-promote admin based on environment variable
     const adminEmail = process.env.ADMIN_EMAIL;
     if (adminEmail && user.email.toLowerCase() === adminEmail.toLowerCase() && user.role !== 'admin') {
@@ -121,44 +204,33 @@ router.post('/login', async (req, res, next) => {
       await user.save();
       console.log(`Auto-promoted ${user.email} to admin role`);
     }
-    
+
     if (user.is2FAEnabled) {
-      // Store userId in session temporarily for 2FA verification
-      req.session.pending2FAUserId = user._id.toString();
-
-      return req.session.save((err) => {
-        if (err) {
-          console.error('2FA pending session save error:', err);
-          return next(err);
-        }
-
-        setSessionIdHeader(res, req.sessionID);
-        return res.json({
+      return persistSession(
+        req,
+        res,
+        next,
+        { pending2FAUserId: user._id.toString() },
+        (activeSessionId) => ({
           success: true,
           requires2FA: true,
-          sessionId: req.sessionID
-        });
-      });
+          sessionId: activeSessionId,
+          data: { sessionId: activeSessionId }
+        })
+      );
     }
-    
-    // Set session
-    req.session.userId = user._id.toString();
-    
-    // Save session and return sessionId for cross-origin fallback
-    req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-        return next(err);
-      }
 
-      const activeSessionId = req.sessionID;
-      setSessionIdHeader(res, activeSessionId);
-
-      res.json({
+    return persistSession(
+      req,
+      res,
+      next,
+      { userId: user._id.toString() },
+      (activeSessionId) => ({
         success: true,
         isAdmin: user.role === 'admin',
         sessionId: activeSessionId,
         data: {
+          sessionId: activeSessionId,
           user: {
             id: user._id,
             name: user.name,
@@ -169,8 +241,8 @@ router.post('/login', async (req, res, next) => {
             kycStatus: user.kycStatus
           }
         }
-      });
-    });
+      })
+    );
   } catch (error) {
     next(error);
   }
@@ -189,21 +261,25 @@ router.post('/logout', (req, res) => {
 
 // Check session (replaces token validation)
 router.get('/session', async (req, res) => {
-  if (!req.session || !req.session.userId) {
-    return res.json({ success: false, message: 'No active session' });
-  }
-
   try {
+    if ((!req.session || !req.session.userId)) {
+      const hydratedFromHeader = await hydrateSessionFromHeader(req, res);
+
+      if (!hydratedFromHeader || !req.session?.userId) {
+        return res.json({ success: false, message: 'No active session' });
+      }
+    }
+
     const user = await User.findById(req.session.userId);
     if (!user) {
-      req.session.destroy();
+      req.session.destroy(() => {});
       return res.json({ success: false, message: 'User not found' });
     }
 
-    const activeSessionId = req.sessionSourceId || req.sessionID;
+    const activeSessionId = req.sessionSourceId || normalizeSessionId(req.headers['x-session-id']) || req.sessionID;
     setSessionIdHeader(res, activeSessionId);
 
-    res.json({
+    return res.json({
       success: true,
       sessionId: activeSessionId,
       data: {
@@ -221,7 +297,7 @@ router.get('/session', async (req, res) => {
       }
     });
   } catch (error) {
-    res.json({ success: false, message: 'Session check failed' });
+    return res.json({ success: false, message: 'Session check failed' });
   }
 });
 

@@ -28,9 +28,29 @@ class ApiService {
     localStorage.removeItem('sessionId');
   }
 
-  private syncSessionIdFromResponse(payload: any) {
-    const sessionId = payload?.sessionId;
-    if (typeof sessionId === 'string' && sessionId.length > 0) {
+  private normalizeSessionId(value: unknown): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const normalized = value.trim().replace(/^"|"$/g, '');
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private extractSessionId(payload: any): string | null {
+    return (
+      this.normalizeSessionId(payload?.sessionId) ||
+      this.normalizeSessionId(payload?.data?.sessionId) ||
+      this.normalizeSessionId(payload?.data?.data?.sessionId)
+    );
+  }
+
+  private syncSessionIdFromResponse(payload: any, headers?: Headers) {
+    const headerSessionId = this.normalizeSessionId(headers?.get('x-session-id'));
+    const payloadSessionId = this.extractSessionId(payload);
+    const sessionId = headerSessionId || payloadSessionId;
+
+    if (sessionId) {
       this.setSessionId(sessionId);
     }
   }
@@ -63,7 +83,7 @@ class ApiService {
         responseData = null;
       }
 
-      this.syncSessionIdFromResponse(responseData);
+      this.syncSessionIdFromResponse(responseData, response.headers);
 
       if (!response.ok) {
         return { success: false, error: responseData?.message || 'Request failed' };
@@ -123,21 +143,9 @@ class ApiService {
   }
 
   async checkSession() {
-    const result = await this.request<any>(`/auth/session?_t=${Date.now()}`, {
+    return this.request<any>(`/auth/session?_t=${Date.now()}`, {
       cache: 'no-store',
     });
-
-    if (!result.success) {
-      const payload = result as any;
-      const message = String(payload?.message || payload?.error || '').toLowerCase();
-
-      // Only clear persisted session when backend confirms it is invalid.
-      if (message.includes('no active session') || message.includes('user not found')) {
-        this.clearSessionId();
-      }
-    }
-
-    return result;
   }
 
   async verifyEmail(token: string) {

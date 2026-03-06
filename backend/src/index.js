@@ -101,30 +101,42 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.set('trust proxy', 1);
 
 // ----------------- Session Setup -----------------
+const isSecureCookie =
+  process.env.NODE_ENV === 'production' ||
+  Boolean(process.env.RENDER) ||
+  /^https:\/\//i.test(process.env.FRONTEND_URL || '');
+
 const sessionStore = MongoStore.create({
   mongoUrl: process.env.MONGODB_URI,
   collectionName: 'sessions',
   ttl: 7 * 24 * 60 * 60 // 7 days
 });
 
+sessionStore.on('error', (error) => {
+  console.error('Session store error:', error);
+});
+
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'greenbull-session-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
+  proxy: true,
+  rolling: true,
   store: sessionStore,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureCookie,
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    sameSite: isSecureCookie ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 });
 app.use(sessionMiddleware);
 
 const normalizeSessionId = (rawSessionId) => {
-  if (typeof rawSessionId !== 'string') return null;
+  const rawValue = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+  if (typeof rawValue !== 'string') return null;
 
-  let decoded = rawSessionId.trim();
+  let decoded = rawValue.trim();
   if (!decoded) return null;
 
   try {
@@ -133,37 +145,72 @@ const normalizeSessionId = (rawSessionId) => {
     // Keep raw value if decode fails
   }
 
+  decoded = decoded.replace(/^"|"$/g, '');
+
   if (decoded.startsWith('s:')) {
-    const unsignedId = decoded.slice(2).split('.')[0];
-    return unsignedId || null;
+    decoded = decoded.slice(2);
   }
 
-  return decoded;
+  if (decoded.includes('.')) {
+    decoded = decoded.split('.')[0];
+  }
+
+  if (decoded.startsWith('sess:')) {
+    decoded = decoded.slice(5);
+  }
+
+  return decoded || null;
+};
+
+const buildSessionCandidates = (rawSessionId) => {
+  const normalized = normalizeSessionId(rawSessionId);
+  if (!normalized) return [];
+
+  return [...new Set([normalized, `sess:${normalized}`])];
+};
+
+const readSessionFromStore = async (candidateIds) => {
+  for (const candidateId of candidateIds) {
+    const sessionData = await new Promise((resolve, reject) => {
+      sessionStore.get(candidateId, (err, session) => {
+        if (err) reject(err);
+        else resolve(session || null);
+      });
+    });
+
+    if (sessionData?.userId || sessionData?.pending2FAUserId) {
+      return { sessionData, sessionId: candidateId.replace(/^sess:/, '') };
+    }
+  }
+
+  return null;
 };
 
 // Fallback: If cookie-based session fails (cross-origin), use x-session-id header
 app.use(async (req, res, next) => {
-  if (req.session?.userId) {
+  if (req.session?.userId || req.session?.pending2FAUserId) {
     return next();
   }
 
-  const normalizedSessionId = normalizeSessionId(req.headers['x-session-id']);
-  if (!normalizedSessionId) {
+  const candidateIds = buildSessionCandidates(req.headers['x-session-id']);
+  if (!candidateIds.length) {
     return next();
   }
 
   try {
-    const sessionData = await new Promise((resolve, reject) => {
-      sessionStore.get(normalizedSessionId, (err, session) => {
-        if (err) reject(err);
-        else resolve(session);
-      });
-    });
+    const sessionResult = await readSessionFromStore(candidateIds);
 
-    if (sessionData?.userId) {
-      req.session.userId = sessionData.userId;
-      req.session.pending2FAUserId = sessionData.pending2FAUserId;
-      req.sessionSourceId = normalizedSessionId;
+    if (sessionResult?.sessionData) {
+      if (sessionResult.sessionData.userId) {
+        req.session.userId = sessionResult.sessionData.userId;
+      }
+
+      if (sessionResult.sessionData.pending2FAUserId) {
+        req.session.pending2FAUserId = sessionResult.sessionData.pending2FAUserId;
+      }
+
+      req.sessionSourceId = sessionResult.sessionId;
+      res.setHeader('x-session-id', sessionResult.sessionId);
     }
   } catch (err) {
     console.error('Header session lookup failed:', err);
