@@ -40,15 +40,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
+  const isInvalidSessionResult = (result: any) => {
+    const message = String(result?.message || result?.error || '').toLowerCase();
+    return message.includes('no active session') || message.includes('user not found');
+  };
+
   const checkAuth = async () => {
     try {
       const hasStoredSessionId = !!localStorage.getItem('sessionId');
-      let result = await api.checkSession();
+      const maxAttempts = hasStoredSessionId ? 3 : 1;
+      let result: any = { success: false };
 
-      // Retry once when we have a persisted session id (cold starts / transient race conditions)
-      if (!result.success && hasStoredSessionId) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         result = await api.checkSession();
+        if (result.success) {
+          break;
+        }
+
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+        }
       }
 
       let resolvedUser: User | null = null;
@@ -79,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             createdAt: userData.createdAt,
           };
         }
+      } else if (hasStoredSessionId && isInvalidSessionResult(result)) {
+        api.clearSessionId();
       }
 
       setUser(resolvedUser);
@@ -96,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await api.login(email, password);
       const resultPayload = result as any;
 
-      console.log('Login API response:', JSON.stringify(result, null, 2));
+      
 
       if (result.success) {
         // Check for 2FA requirement before expecting user payload
