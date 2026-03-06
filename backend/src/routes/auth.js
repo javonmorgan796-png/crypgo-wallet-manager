@@ -10,6 +10,21 @@ const router = express.Router();
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+router.use((req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    Pragma: 'no-cache',
+    Expires: '0'
+  });
+  next();
+});
+
+const setSessionIdHeader = (res, sessionId) => {
+  if (sessionId) {
+    res.setHeader('x-session-id', sessionId);
+  }
+};
+
 // Sign Up
 router.post('/signup', async (req, res, next) => {
   try {
@@ -107,13 +122,22 @@ router.post('/login', async (req, res, next) => {
       console.log(`Auto-promoted ${user.email} to admin role`);
     }
     
-    // Check if 2FA is enabled
     if (user.is2FAEnabled) {
       // Store userId in session temporarily for 2FA verification
       req.session.pending2FAUserId = user._id.toString();
-      return res.json({
-        success: true,
-        requires2FA: true
+
+      return req.session.save((err) => {
+        if (err) {
+          console.error('2FA pending session save error:', err);
+          return next(err);
+        }
+
+        setSessionIdHeader(res, req.sessionID);
+        return res.json({
+          success: true,
+          requires2FA: true,
+          sessionId: req.sessionID
+        });
       });
     }
     
@@ -124,11 +148,16 @@ router.post('/login', async (req, res, next) => {
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
+        return next(err);
       }
+
+      const activeSessionId = req.sessionID;
+      setSessionIdHeader(res, activeSessionId);
+
       res.json({
         success: true,
         isAdmin: user.role === 'admin',
-        sessionId: req.sessionID,
+        sessionId: activeSessionId,
         data: {
           user: {
             id: user._id,
@@ -172,6 +201,7 @@ router.get('/session', async (req, res) => {
     }
 
     const activeSessionId = req.sessionSourceId || req.sessionID;
+    setSessionIdHeader(res, activeSessionId);
 
     res.json({
       success: true,
@@ -379,7 +409,9 @@ router.post('/2fa/verify', async (req, res, next) => {
 
       return req.session.save((err) => {
         if (err) return next(err);
-        res.json({
+
+        setSessionIdHeader(res, req.sessionID);
+        return res.json({
           success: true,
           sessionId: req.sessionID,
           message: '2FA verified successfully',
@@ -398,6 +430,7 @@ router.post('/2fa/verify', async (req, res, next) => {
       });
     }
 
+    setSessionIdHeader(res, req.sessionID);
     res.json({
       success: true,
       sessionId: req.sessionID,

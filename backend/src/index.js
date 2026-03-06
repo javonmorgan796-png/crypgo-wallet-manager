@@ -82,7 +82,9 @@ app.use(cors({
                       origin.includes('lovableproject.com');
     callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
   },
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id'],
+  exposedHeaders: ['x-session-id']
 }));
 
 const limiter = rateLimit({
@@ -119,29 +121,49 @@ const sessionMiddleware = session({
 });
 app.use(sessionMiddleware);
 
+const normalizeSessionId = (rawSessionId) => {
+  if (typeof rawSessionId !== 'string') return null;
+
+  let decoded = rawSessionId.trim();
+  if (!decoded) return null;
+
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    // Keep raw value if decode fails
+  }
+
+  if (decoded.startsWith('s:')) {
+    const unsignedId = decoded.slice(2).split('.')[0];
+    return unsignedId || null;
+  }
+
+  return decoded;
+};
+
 // Fallback: If cookie-based session fails (cross-origin), use x-session-id header
 app.use(async (req, res, next) => {
   if (req.session?.userId) {
     return next();
   }
 
-  const headerSessionId = req.headers['x-session-id'];
-  if (!headerSessionId || typeof headerSessionId !== 'string') {
+  const normalizedSessionId = normalizeSessionId(req.headers['x-session-id']);
+  if (!normalizedSessionId) {
     return next();
   }
 
   try {
     const sessionData = await new Promise((resolve, reject) => {
-      sessionStore.get(headerSessionId, (err, session) => {
+      sessionStore.get(normalizedSessionId, (err, session) => {
         if (err) reject(err);
         else resolve(session);
       });
     });
 
-    if (sessionData) {
+    if (sessionData?.userId) {
       req.session.userId = sessionData.userId;
       req.session.pending2FAUserId = sessionData.pending2FAUserId;
-      req.sessionSourceId = headerSessionId;
+      req.sessionSourceId = normalizedSessionId;
     }
   } catch (err) {
     console.error('Header session lookup failed:', err);

@@ -42,39 +42,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      // Check if there's an active session on the server
-      const result = await api.checkSession();
-      if (result.success && result.data) {
-        const responseData = result.data as any;
-        
-        // Store sessionId if returned (for cross-origin persistence)
-        if (responseData.sessionId) {
-          localStorage.setItem('sessionId', responseData.sessionId);
-        } else if ((result as any).sessionId) {
-          localStorage.setItem('sessionId', (result as any).sessionId);
+      const hasStoredSessionId = !!localStorage.getItem('sessionId');
+      let result = await api.checkSession();
+
+      // Retry once when we have a persisted session id (cold starts / transient race conditions)
+      if (!result.success && hasStoredSessionId) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        result = await api.checkSession();
+      }
+
+      let resolvedUser: User | null = null;
+
+      if (result.success) {
+        const payload = result as any;
+
+        if (payload.sessionId) {
+          localStorage.setItem('sessionId', payload.sessionId);
         }
 
-        const userData = responseData.data || responseData;
-        setUser({
-          id: userData.id || userData._id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role || 'user',
-          isVerified: userData.isVerified || false,
-          is2FAEnabled: userData.is2FAEnabled || false,
-          kycStatus: userData.kycStatus || 'none',
-          balance: userData.balance || 0,
-          totalProfit: userData.totalProfit || 0,
-          totalInvested: userData.totalInvested || 0,
-          avatar: userData.avatar,
-          referralCode: userData.referralCode,
-          createdAt: userData.createdAt,
-        });
+        const userData = payload?.data?.data || payload?.data || payload;
+
+        if (userData?.id || userData?._id) {
+          resolvedUser = {
+            id: userData.id || userData._id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role || 'user',
+            isVerified: userData.isVerified || false,
+            is2FAEnabled: userData.is2FAEnabled || false,
+            kycStatus: userData.kycStatus || 'none',
+            balance: userData.balance || 0,
+            totalProfit: userData.totalProfit || 0,
+            totalInvested: userData.totalInvested || 0,
+            avatar: userData.avatar,
+            referralCode: userData.referralCode,
+            createdAt: userData.createdAt,
+          };
+        }
       }
+
+      setUser(resolvedUser);
     } catch (error) {
       console.error('Auth check failed:', error);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const login = async (email: string, password: string) => {
