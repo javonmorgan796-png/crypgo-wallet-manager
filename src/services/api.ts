@@ -123,10 +123,20 @@ class ApiService {
   }
 
   async checkSession() {
-    const result = await this.request<any>('/auth/session');
+    const result = await this.request<any>(`/auth/session?_t=${Date.now()}`, {
+      cache: 'no-store',
+    });
+
     if (!result.success) {
-      this.clearSessionId();
+      const payload = result as any;
+      const message = String(payload?.message || payload?.error || '').toLowerCase();
+
+      // Only clear persisted session when backend confirms it is invalid.
+      if (message.includes('no active session') || message.includes('user not found')) {
+        this.clearSessionId();
+      }
     }
+
     return result;
   }
 
