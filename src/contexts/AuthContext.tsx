@@ -194,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           createdAt: userData.createdAt || new Date().toISOString(),
         };
 
+        setCachedUser(userObj);
         setUser(userObj);
         setIsLoading(false);
         return { success: true, isAdmin: userRole === 'admin' };
