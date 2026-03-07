@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  TrendingUp, TrendingDown, Pause, RefreshCw, Loader2, Activity, Target, 
-  Clock, AlertTriangle, Lock, Zap, Shield, Crown, CheckCircle, Upload
+import {
+  TrendingUp, TrendingDown, Pause, RefreshCw, Loader2, Activity, Target,
+  Clock, AlertTriangle, Lock, Zap, Shield, Crown, CheckCircle
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUserWebSocket } from '@/hooks/useUserWebSocket';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/services/api';
