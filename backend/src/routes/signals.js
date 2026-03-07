@@ -2,6 +2,7 @@ const express = require('express');
 const Signal = require('../models/Signal');
 const SignalSubscription = require('../models/SignalSubscription');
 const Notification = require('../models/Notification');
+const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/auth');
 const { notifySignalUpdate } = require('../websocket/userUpdates');
