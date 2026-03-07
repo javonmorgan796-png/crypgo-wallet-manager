@@ -259,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await api.getProfile();
       if (result.success && result.data) {
-        setUser({
+        const refreshedUser: User = {
           id: result.data.id || result.data._id,
           name: result.data.name,
           email: result.data.email,
@@ -273,7 +273,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar: result.data.avatar,
           referralCode: result.data.referralCode,
           createdAt: result.data.createdAt,
-        });
+        };
+
+        setCachedUser(refreshedUser);
+        setUser(refreshedUser);
       }
     } catch (error) {
       console.error('Failed to refresh user:', error);
