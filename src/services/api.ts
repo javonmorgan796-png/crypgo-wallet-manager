@@ -257,12 +257,7 @@ class ApiService {
 
   // KYC
   async submitKYC(formData: FormData) {
-    const response = await fetch(`${this.baseUrl}/kyc/submit`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-    return response.json();
+    return this.formDataRequest('/kyc/submit', formData);
   }
 
   async getKYCStatus() {
@@ -282,24 +277,7 @@ class ApiService {
       formData.append('receipt', receipt);
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}/wallet/deposit`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        return { success: false, error: data.message || 'Deposit failed', message: data.message };
-      }
-      
-      return data;
-    } catch (error: any) {
-      console.error('Deposit API error:', error);
-      return { success: false, error: error.message || 'Network error', message: error.message };
-    }
+    return this.formDataRequest('/wallet/deposit', formData);
   }
 
   async withdraw(amount: number, address: string, method: string) {
