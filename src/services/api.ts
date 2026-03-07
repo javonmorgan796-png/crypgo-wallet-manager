@@ -525,23 +525,16 @@ class ApiService {
     return this.request<{ hasAccess: boolean; subscription: any }>('/signals/subscription');
   }
 
-  async subscribeToSignals(plan: string, receipt?: File) {
+  async subscribeToSignals(plan: string, paymentMethod: 'balance' | 'receipt' = 'balance', receipt?: File) {
     const formData = new FormData();
     formData.append('plan', plan);
+    formData.append('paymentMethod', paymentMethod);
+
     if (receipt) {
       formData.append('receipt', receipt);
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}/signals/subscribe`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      return response.json();
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
+    return this.formDataRequest('/signals/subscribe', formData);
   }
 
   async adminGetSignalSubscriptions(status?: string) {
