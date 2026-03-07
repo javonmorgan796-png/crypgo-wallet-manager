@@ -69,21 +69,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAuth = async () => {
     try {
       const hasStoredSessionId = !!localStorage.getItem('sessionId');
-      const maxAttempts = hasStoredSessionId ? 3 : 1;
+      const cachedUser = hasStoredSessionId ? getCachedUser() : null;
+
+      if (cachedUser) {
+        setUser(cachedUser);
+      }
+
+      const maxAttempts = hasStoredSessionId ? 5 : 1;
       let result: any = { success: false };
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         result = await api.checkSession();
-        if (result.success) {
+
+        if (result.success || isInvalidSessionResult(result)) {
           break;
         }
 
         if (attempt < maxAttempts - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+          await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)));
         }
       }
 
-      let resolvedUser: User | null = null;
+      let resolvedUser: User | null = cachedUser;
 
       if (result.success) {
         const payload = result as any;
@@ -110,15 +117,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             referralCode: userData.referralCode,
             createdAt: userData.createdAt,
           };
+          setCachedUser(resolvedUser);
         }
       } else if (hasStoredSessionId && isInvalidSessionResult(result)) {
         api.clearSessionId();
+        resolvedUser = null;
+        setCachedUser(null);
       }
 
       setUser(resolvedUser);
     } catch (error) {
       console.error('Auth check failed:', error);
-      setUser(null);
+      setUser(getCachedUser());
     } finally {
       setIsLoading(false);
     }
