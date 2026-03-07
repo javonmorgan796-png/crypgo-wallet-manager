@@ -250,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout error:', error);
     }
     api.clearSessionId();
+    setCachedUser(null);
     setUser(null);
     setPending2FA(false);
   };
