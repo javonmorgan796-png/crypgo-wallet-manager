@@ -54,6 +54,7 @@ interface SignalPlan {
 
 export default function Signals() {
   const { toast } = useToast();
+  const { user, refreshUser } = useAuth();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('active');
@@ -62,8 +63,11 @@ export default function Signals() {
   const [plans, setPlans] = useState<SignalPlan[]>([]);
   const [showSubscribeDialog, setShowSubscribeDialog] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
-  const [receipt, setReceipt] = useState<File | null>(null);
   const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const selectedPlanConfig = plans.find((plan) => plan.id === selectedPlan);
+  const walletBalance = user?.balance ?? 0;
+  const hasEnoughBalance = selectedPlanConfig ? walletBalance >= selectedPlanConfig.price : true;
 
   const checkAccess = useCallback(async () => {
     try {
@@ -129,15 +133,26 @@ export default function Signals() {
       toast({ title: 'Select a plan', variant: 'destructive' });
       return;
     }
+
+    if (!selectedPlanConfig || walletBalance < selectedPlanConfig.price) {
+      toast({
+        title: 'Insufficient balance',
+        description: 'Fund your wallet to buy this signal plan.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setIsSubscribing(true);
     try {
-      const result = await api.subscribeToSignals(selectedPlan, receipt || undefined);
+      const result = await api.subscribeToSignals(selectedPlan, 'balance');
+
       if (result.success) {
-        toast({ title: 'Subscription submitted!', description: 'Awaiting admin approval. You will be notified once approved.' });
+        toast({ title: 'Subscription activated!', description: 'Payment completed from your wallet balance.' });
         setShowSubscribeDialog(false);
         setSelectedPlan('');
-        setReceipt(null);
-        checkAccess();
+        await refreshUser();
+        await checkAccess();
       } else {
         toast({ title: 'Error', description: result.error || 'Failed to subscribe', variant: 'destructive' });
       }
