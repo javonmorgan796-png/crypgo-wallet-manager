@@ -55,19 +55,25 @@ class ApiService {
     }
   }
 
+  private getSessionHeaders(headers: HeadersInit = {}): HeadersInit {
+    const mergedHeaders: HeadersInit = { ...headers };
+    const sessionId = this.getSessionId();
+
+    if (sessionId) {
+      (mergedHeaders as Record<string, string>)['x-session-id'] = sessionId;
+    }
+
+    return mergedHeaders;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const headers: HeadersInit = {
+    const headers = this.getSessionHeaders({
       'Content-Type': 'application/json',
       ...options.headers,
-    };
-
-    const sessionId = this.getSessionId();
-    if (sessionId) {
-      (headers as Record<string, string>)['x-session-id'] = sessionId;
-    }
+    });
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -97,6 +103,39 @@ class ApiService {
     } catch (error) {
       console.error('API Error:', error);
       return { success: false, error: 'Unable to connect to server. Please check your internet connection and try again.' };
+    }
+  }
+
+  private async formDataRequest<T>(endpoint: string, formData: FormData): Promise<ApiResponse<T> & { message?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: this.getSessionHeaders(),
+        body: formData,
+      });
+
+      let responseData: any = null;
+      try {
+        responseData = await response.json();
+      } catch {
+        responseData = null;
+      }
+
+      this.syncSessionIdFromResponse(responseData, response.headers);
+
+      if (!response.ok) {
+        const message = responseData?.message || 'Request failed';
+        return { success: false, error: message, message };
+      }
+
+      if (responseData && typeof responseData.success === 'boolean') {
+        return responseData;
+      }
+
+      return { success: true, data: responseData };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Network error', message: error?.message || 'Network error' };
     }
   }
 
@@ -218,12 +257,7 @@ class ApiService {
 
   // KYC
   async submitKYC(formData: FormData) {
-    const response = await fetch(`${this.baseUrl}/kyc/submit`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-    return response.json();
+    return this.formDataRequest('/kyc/submit', formData);
   }
 
   async getKYCStatus() {
@@ -243,24 +277,7 @@ class ApiService {
       formData.append('receipt', receipt);
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}/wallet/deposit`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        return { success: false, error: data.message || 'Deposit failed', message: data.message };
-      }
-      
-      return data;
-    } catch (error: any) {
-      console.error('Deposit API error:', error);
-      return { success: false, error: error.message || 'Network error', message: error.message };
-    }
+    return this.formDataRequest('/wallet/deposit', formData);
   }
 
   async withdraw(amount: number, address: string, method: string) {
@@ -508,23 +525,16 @@ class ApiService {
     return this.request<{ hasAccess: boolean; subscription: any }>('/signals/subscription');
   }
 
-  async subscribeToSignals(plan: string, receipt?: File) {
+  async subscribeToSignals(plan: string, paymentMethod: 'balance' | 'receipt' = 'balance', receipt?: File) {
     const formData = new FormData();
     formData.append('plan', plan);
+    formData.append('paymentMethod', paymentMethod);
+
     if (receipt) {
       formData.append('receipt', receipt);
     }
 
-    try {
-      const response = await fetch(`${this.baseUrl}/signals/subscribe`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      return response.json();
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
+    return this.formDataRequest('/signals/subscribe', formData);
   }
 
   async adminGetSignalSubscriptions(status?: string) {

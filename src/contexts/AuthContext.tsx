@@ -36,6 +36,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [pending2FA, setPending2FA] = useState(false);
 
+  const USER_CACHE_KEY = 'cachedUser';
+
+  const getCachedUser = (): User | null => {
+    try {
+      const raw = localStorage.getItem(USER_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as User;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedUser = (nextUser: User | null) => {
+    if (!nextUser) {
+      localStorage.removeItem(USER_CACHE_KEY);
+      return;
+    }
+
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(nextUser));
+  };
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -48,21 +69,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAuth = async () => {
     try {
       const hasStoredSessionId = !!localStorage.getItem('sessionId');
-      const maxAttempts = hasStoredSessionId ? 3 : 1;
+      const cachedUser = hasStoredSessionId ? getCachedUser() : null;
+
+      if (cachedUser) {
+        setUser(cachedUser);
+      }
+
+      const maxAttempts = hasStoredSessionId ? 5 : 1;
       let result: any = { success: false };
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         result = await api.checkSession();
-        if (result.success) {
+
+        if (result.success || isInvalidSessionResult(result)) {
           break;
         }
 
         if (attempt < maxAttempts - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+          await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)));
         }
       }
 
-      let resolvedUser: User | null = null;
+      let resolvedUser: User | null = cachedUser;
 
       if (result.success) {
         const payload = result as any;
@@ -89,15 +117,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             referralCode: userData.referralCode,
             createdAt: userData.createdAt,
           };
+          setCachedUser(resolvedUser);
         }
       } else if (hasStoredSessionId && isInvalidSessionResult(result)) {
         api.clearSessionId();
+        resolvedUser = null;
+        setCachedUser(null);
       }
 
       setUser(resolvedUser);
     } catch (error) {
       console.error('Auth check failed:', error);
-      setUser(null);
+      setUser(getCachedUser());
     } finally {
       setIsLoading(false);
     }
@@ -163,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           createdAt: userData.createdAt || new Date().toISOString(),
         };
 
+        setCachedUser(userObj);
         setUser(userObj);
         setIsLoading(false);
         return { success: true, isAdmin: userRole === 'admin' };
@@ -218,6 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout error:', error);
     }
     api.clearSessionId();
+    setCachedUser(null);
     setUser(null);
     setPending2FA(false);
   };
@@ -226,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await api.getProfile();
       if (result.success && result.data) {
-        setUser({
+        const refreshedUser: User = {
           id: result.data.id || result.data._id,
           name: result.data.name,
           email: result.data.email,
@@ -240,7 +273,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar: result.data.avatar,
           referralCode: result.data.referralCode,
           createdAt: result.data.createdAt,
-        });
+        };
+
+        setCachedUser(refreshedUser);
+        setUser(refreshedUser);
       }
     } catch (error) {
       console.error('Failed to refresh user:', error);

@@ -2,6 +2,7 @@ const express = require('express');
 const Signal = require('../models/Signal');
 const SignalSubscription = require('../models/SignalSubscription');
 const Notification = require('../models/Notification');
+const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const { protect, adminOnly } = require('../middleware/auth');
 const { notifySignalUpdate } = require('../websocket/userUpdates');
@@ -48,13 +49,81 @@ router.get('/subscription', protect, async (req, res, next) => {
   }
 });
 
-// Subscribe to signal plan (with payment receipt)
+// Subscribe to signal plan (wallet balance or receipt)
 router.post('/subscribe', protect, upload.single('receipt'), async (req, res, next) => {
   try {
-    const { plan } = req.body;
-    
+    const { plan, paymentMethod = 'balance' } = req.body;
+
     if (!SIGNAL_PLANS[plan]) {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
+    }
+
+    const activeSubscription = await SignalSubscription.findOne({
+      user: req.user._id,
+      status: 'active',
+      endDate: { $gte: new Date() }
+    });
+
+    if (activeSubscription) {
+      return res.status(400).json({
+        success: false,
+        message: 'You already have an active signal subscription.'
+      });
+    }
+
+    const planConfig = SIGNAL_PLANS[plan];
+
+    if (paymentMethod === 'balance') {
+      const chargedUser = await User.findOneAndUpdate(
+        { _id: req.user._id, balance: { $gte: planConfig.price } },
+        { $inc: { balance: -planConfig.price } },
+        { new: true }
+      );
+
+      if (!chargedUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient balance. Please fund your wallet first.'
+        });
+      }
+
+      const now = new Date();
+      const endDate = new Date(now.getTime() + planConfig.duration * 24 * 60 * 60 * 1000);
+
+      const subscription = await SignalSubscription.create({
+        user: req.user._id,
+        plan,
+        price: planConfig.price,
+        status: 'active',
+        startDate: now,
+        endDate
+      });
+
+      await Transaction.create({
+        user: req.user._id,
+        type: 'transfer',
+        amount: planConfig.price,
+        method: 'wallet_balance',
+        status: 'completed',
+        notes: `Signal subscription (${planConfig.label})`
+      });
+
+      await Notification.create({
+        user: req.user._id,
+        title: 'Signal Subscription Activated',
+        message: `$${planConfig.price} was deducted from your wallet. Your ${planConfig.label} signal plan is now active.`,
+        type: 'signal'
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Subscription activated successfully using wallet balance.',
+        data: {
+          hasAccess: true,
+          subscription,
+          remainingBalance: chargedUser.balance
+        }
+      });
     }
 
     let receiptUrl = null;
@@ -66,30 +135,30 @@ router.post('/subscribe', protect, upload.single('receipt'), async (req, res, ne
     const subscription = await SignalSubscription.create({
       user: req.user._id,
       plan,
-      price: SIGNAL_PLANS[plan].price,
+      price: planConfig.price,
       status: 'pending',
       paymentReceipt: receiptUrl
     });
 
-    // Notify admin
+    // Notify admin for manual receipt approvals
     const admins = await User.find({ role: 'admin' }).select('_id');
     if (admins.length > 0) {
-      const notifications = admins.map(admin => ({
+      const notifications = admins.map((admin) => ({
         user: admin._id,
         title: 'New Signal Subscription',
-        message: `${req.user.name} subscribed to ${SIGNAL_PLANS[plan].label} signal plan ($${SIGNAL_PLANS[plan].price}). Pending approval.`,
+        message: `${req.user.name} subscribed to ${planConfig.label} signal plan ($${planConfig.price}). Pending approval.`,
         type: 'signal'
       }));
       await Notification.insertMany(notifications);
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Subscription submitted. Awaiting admin approval.',
-      data: subscription
+      data: { hasAccess: false, subscription }
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

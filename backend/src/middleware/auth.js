@@ -1,9 +1,72 @@
 const User = require('../models/User');
 
+const normalizeSessionId = (rawSessionId) => {
+  const rawValue = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+  if (typeof rawValue !== 'string') return null;
+
+  let normalized = rawValue.trim();
+  if (!normalized) return null;
+
+  try {
+    normalized = decodeURIComponent(normalized);
+  } catch {
+    // Keep raw value if decode fails
+  }
+
+  normalized = normalized.replace(/^"|"$/g, '');
+
+  if (normalized.startsWith('s:')) {
+    normalized = normalized.slice(2);
+  }
+
+  if (normalized.includes('.')) {
+    normalized = normalized.split('.')[0];
+  }
+
+  if (normalized.startsWith('sess:')) {
+    normalized = normalized.slice(5);
+  }
+
+  return normalized || null;
+};
+
+const hydrateSessionFromHeader = async (req) => {
+  if (!req.sessionStore || !req.session) {
+    return false;
+  }
+
+  const normalizedSessionId = normalizeSessionId(req.headers['x-session-id']);
+  if (!normalizedSessionId) {
+    return false;
+  }
+
+  const sessionCandidates = [...new Set([normalizedSessionId, `sess:${normalizedSessionId}`])];
+
+  for (const candidate of sessionCandidates) {
+    const sessionData = await new Promise((resolve, reject) => {
+      req.sessionStore.get(candidate, (err, session) => {
+        if (err) reject(err);
+        else resolve(session || null);
+      });
+    });
+
+    if (sessionData?.userId) {
+      req.session.userId = sessionData.userId.toString();
+      return true;
+    }
+  }
+
+  return false;
+};
+
 // Verify session middleware
 const protect = async (req, res, next) => {
   try {
-    if (!req.session || !req.session.userId) {
+    if (!req.session?.userId) {
+      await hydrateSessionFromHeader(req);
+    }
+
+    if (!req.session?.userId) {
       return res.status(401).json({
         success: false,
         message: 'Not authorized. Please log in.'
@@ -13,7 +76,7 @@ const protect = async (req, res, next) => {
     const user = await User.findById(req.session.userId);
 
     if (!user) {
-      req.session.destroy();
+      req.session.destroy(() => {});
       return res.status(401).json({
         success: false,
         message: 'User not found. Session invalid.'
