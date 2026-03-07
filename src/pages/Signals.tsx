@@ -297,7 +297,7 @@ export default function Signals() {
               <DialogHeader>
                 <DialogTitle>Subscribe to Signals</DialogTitle>
                 <DialogDescription>
-                  Select a plan and upload payment receipt to get access.
+                  Select a plan and pay directly from your wallet balance.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -308,7 +308,7 @@ export default function Signals() {
                       <SelectValue placeholder="Choose a plan" />
                     </SelectTrigger>
                     <SelectContent>
-                      {plans.map(p => (
+                      {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.label} — ${p.price}
                         </SelectItem>
@@ -316,37 +316,27 @@ export default function Signals() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Payment Receipt</Label>
-                  <div 
-                    className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => document.getElementById('receipt-upload')?.click()}
-                  >
-                    {receipt ? (
-                      <div className="flex items-center justify-center gap-2 text-emerald-400">
-                        <CheckCircle className="h-5 w-5" />
-                        <span className="text-sm">{receipt.name}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">Click to upload receipt</p>
-                      </>
-                    )}
+
+                <div className="rounded-lg border border-border bg-secondary/40 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Wallet Balance</span>
+                    <span className="font-semibold text-foreground">${walletBalance.toFixed(2)}</span>
                   </div>
-                  <input 
-                    id="receipt-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => setReceipt(e.target.files?.[0] || null)}
-                  />
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Plan Price</span>
+                    <span className="font-semibold text-foreground">
+                      {selectedPlanConfig ? `$${selectedPlanConfig.price.toFixed(2)}` : '--'}
+                    </span>
+                  </div>
+                  {selectedPlanConfig && !hasEnoughBalance && (
+                    <p className="text-sm text-destructive">Insufficient balance for this plan.</p>
+                  )}
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowSubscribeDialog(false)}>Cancel</Button>
-                <Button onClick={handleSubscribe} disabled={isSubscribing} className="bg-emerald-600 hover:bg-emerald-700">
-                  {isSubscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit Payment'}
+                <Button onClick={handleSubscribe} disabled={isSubscribing || !selectedPlan || !hasEnoughBalance} className="bg-emerald-600 hover:bg-emerald-700">
+                  {isSubscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Pay from Balance'}
                 </Button>
               </DialogFooter>
             </DialogContent>
