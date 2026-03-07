@@ -55,19 +55,25 @@ class ApiService {
     }
   }
 
+  private getSessionHeaders(headers: HeadersInit = {}): HeadersInit {
+    const mergedHeaders: HeadersInit = { ...headers };
+    const sessionId = this.getSessionId();
+
+    if (sessionId) {
+      (mergedHeaders as Record<string, string>)['x-session-id'] = sessionId;
+    }
+
+    return mergedHeaders;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const headers: HeadersInit = {
+    const headers = this.getSessionHeaders({
       'Content-Type': 'application/json',
       ...options.headers,
-    };
-
-    const sessionId = this.getSessionId();
-    if (sessionId) {
-      (headers as Record<string, string>)['x-session-id'] = sessionId;
-    }
+    });
 
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -97,6 +103,39 @@ class ApiService {
     } catch (error) {
       console.error('API Error:', error);
       return { success: false, error: 'Unable to connect to server. Please check your internet connection and try again.' };
+    }
+  }
+
+  private async formDataRequest<T>(endpoint: string, formData: FormData): Promise<ApiResponse<T> & { message?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: this.getSessionHeaders(),
+        body: formData,
+      });
+
+      let responseData: any = null;
+      try {
+        responseData = await response.json();
+      } catch {
+        responseData = null;
+      }
+
+      this.syncSessionIdFromResponse(responseData, response.headers);
+
+      if (!response.ok) {
+        const message = responseData?.message || 'Request failed';
+        return { success: false, error: message, message };
+      }
+
+      if (responseData && typeof responseData.success === 'boolean') {
+        return responseData;
+      }
+
+      return { success: true, data: responseData };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Network error', message: error?.message || 'Network error' };
     }
   }
 
