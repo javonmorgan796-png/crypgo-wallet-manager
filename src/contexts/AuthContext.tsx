@@ -36,6 +36,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [pending2FA, setPending2FA] = useState(false);
 
+  const USER_CACHE_KEY = 'cachedUser';
+
+  const getCachedUser = (): User | null => {
+    try {
+      const raw = localStorage.getItem(USER_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as User;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedUser = (nextUser: User | null) => {
+    if (!nextUser) {
+      localStorage.removeItem(USER_CACHE_KEY);
+      return;
+    }
+
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(nextUser));
+  };
+
   useEffect(() => {
     checkAuth();
   }, []);
