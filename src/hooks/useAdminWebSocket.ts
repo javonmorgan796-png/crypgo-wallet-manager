@@ -11,7 +11,7 @@ interface AdminEvent {
 
 export function useAdminWebSocket(onEvent?: (event: AdminEvent) => void) {
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<AdminEvent | null>(null);
 
