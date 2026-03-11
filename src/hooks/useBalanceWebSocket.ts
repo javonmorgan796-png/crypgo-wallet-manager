@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://greenbull-api.onrender.com/ws/balance';
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://greenbull-wallet-manager.onrender.com/ws/balance';
 
 interface BalanceUpdateData {
   balance: number;

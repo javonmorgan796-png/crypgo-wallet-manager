@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://greenbull-api.onrender.com';
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://greenbull-wallet-manager.onrender.com';
 
 interface AdminEvent {
   event: string;
