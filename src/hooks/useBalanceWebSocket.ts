@@ -25,7 +25,7 @@ export function useBalanceWebSocket(onBalanceUpdate?: (newBalance: number) => vo
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
 
