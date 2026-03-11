@@ -37,7 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
 import api from '@/services/api';
 
-const API_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
+const API_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-wallet-manager.onrender.com';
 
 // Helper component for receipt images - supports base64 data URIs and URLs
 const ReceiptImage = ({ url }: { url: string }) => {

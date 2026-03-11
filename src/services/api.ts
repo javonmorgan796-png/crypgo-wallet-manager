@@ -1,7 +1,7 @@
 // API Service for MongoDB Backend on Render.com
 // Connected to live Render backend — uses server-side sessions (cookies)
 
-const RENDER_API_URL = import.meta.env.VITE_RENDER_API_URL || 'https://greenbull-api.onrender.com/api';
+const RENDER_API_URL = import.meta.env.VITE_RENDER_API_URL || 'https://greenbull-wallet-manager.onrender.com/api';
 
 interface ApiResponse<T> {
   success: boolean;

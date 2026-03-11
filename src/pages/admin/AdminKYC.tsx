@@ -33,7 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import api from '@/services/api';
 
-const BACKEND_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-api.onrender.com';
+const BACKEND_URL = import.meta.env.VITE_RENDER_API_URL?.replace('/api', '') || 'https://greenbull-wallet-manager.onrender.com';
 
 // Helper component for KYC document images - supports base64 data URIs and URLs
 const KYCDocumentImage = ({ url, alt }: { url: string; alt: string }) => {

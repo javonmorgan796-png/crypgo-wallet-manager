@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
-const WS_URL = import.meta.env.VITE_WS_URL?.replace('/ws/balance', '/ws/user') || 'wss://greenbull-api.onrender.com/ws/user';
+const WS_URL = import.meta.env.VITE_WS_URL?.replace('/ws/balance', '/ws/user') || 'wss://greenbull-wallet-manager.onrender.com/ws/user';
 
 interface UserWebSocketMessage {
   event: string;
