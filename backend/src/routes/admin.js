@@ -681,17 +681,18 @@ router.post('/notifications/send', async (req, res, next) => {
         title,
         message,
         type,
-        emailSent: shouldSendEmail
+        emailSent: false
       }));
-      await Notification.insertMany(notifications);
+      const createdNotifications = await Notification.insertMany(notifications);
       notificationsSent = users.length;
       
       // Send emails if requested
       if (shouldSendEmail) {
-        for (const user of users) {
+        for (let i = 0; i < users.length; i++) {
+          const user = users[i];
           if (user.email) {
             try {
-              await sendEmail({
+              const emailResult = await sendEmail({
                 to: user.email,
                 subject: title,
                 html: `
@@ -703,7 +704,7 @@ router.post('/notifications/send', async (req, res, next) => {
                       <h2 style="color: #111827; margin-bottom: 16px;">${title}</h2>
                       <p style="color: #374151; font-size: 16px; line-height: 1.6;">${message}</p>
                       <div style="text-align: center; margin: 30px 0;">
-                        <a href="${process.env.FRONTEND_URL || 'https://grebull.lovable.app'}/dashboard" 
+                        <a href="${process.env.FRONTEND_URL || 'https://greebull.onrender.com'}/dashboard" 
                            style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
                                   color: white; 
                                   padding: 14px 30px; 
@@ -720,8 +721,16 @@ router.post('/notifications/send', async (req, res, next) => {
                   </div>
                 `
               });
-              emailsSent++;
-              console.log(`Notification email sent to ${user.email}`);
+              
+              if (emailResult.success) {
+                emailsSent++;
+                await Notification.findByIdAndUpdate(createdNotifications[i]._id, { 
+                  emailSent: true, 
+                  emailSentAt: new Date() 
+                });
+              } else {
+                emailErrors.push({ email: user.email, error: emailResult.error });
+              }
             } catch (emailError) {
               console.error(`Email sending failed for ${user.email}:`, emailError);
               emailErrors.push({ email: user.email, error: emailError.message });
