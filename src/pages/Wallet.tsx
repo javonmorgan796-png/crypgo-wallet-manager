@@ -14,9 +14,9 @@ import { FeedbackDialog } from '@/components/ui/success-dialog';
 import { toast } from 'sonner';
 
 const cryptoOptions = [
-  { value: 'btc', label: 'Bitcoin (BTC)', address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2' },
-  { value: 'eth', label: 'Ethereum (ETH)', address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bE7c' },
-  { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9' },
+  { value: 'btc', label: 'Bitcoin (BTC)', address: '1E3CUe4SM1YXtS6rPnyAFjnPp5vuD2f1wC' },
+  { value: 'eth', label: 'Ethereum (ETH)', address: '0x58964d82bae9153f91e06ae222a7b53c63313b22' },
+  { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TAjj5GTpwRGYxdrNhGGYsUBXeqX5pHxauy' },
 ];
 
 export default function WalletPage() {
