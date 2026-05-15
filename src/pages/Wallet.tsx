@@ -13,9 +13,15 @@ import api from '@/services/api';
 import { FeedbackDialog } from '@/components/ui/success-dialog';
 import { toast } from 'sonner';
 
-const cryptoOptions = [
-  { value: 'btc', label: 'Bitcoin (BTC)', address: '1E3CUe4SM1YXtS6rPnyAFjnPp5vuD2f1wC' },
-  { value: 'eth', label: 'Ethereum (ETH)', address: '0x58964d82bae9153f91e06ae222a7b53c63313b22' },
+interface CryptoOption {
+  value: string;
+  label: string;
+  address: string;
+  qrCode?: string;
+  network?: string;
+}
+
+const fallbackCryptoOptions: CryptoOption[] = [
   { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TAjj5GTpwRGYxdrNhGGYsUBXeqX5pHxauy' },
 ];
 
