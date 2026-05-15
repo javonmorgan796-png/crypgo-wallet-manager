@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { 
+import { useEffect } from 'react';
+import {
   ArrowRight, 
   Shield, 
   TrendingUp, 
