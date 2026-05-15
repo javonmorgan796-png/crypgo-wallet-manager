@@ -29,6 +29,7 @@ export default function WalletPage() {
   const { user, refreshUser } = useAuth();
   const { balance, isLoading: isDataLoading, refresh: refreshData } = useUserData();
   
+  const [cryptoOptions, setCryptoOptions] = useState<CryptoOption[]>(fallbackCryptoOptions);
   const [selectedCrypto, setSelectedCrypto] = useState('usdt-trc20');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
@@ -52,8 +53,31 @@ export default function WalletPage() {
     message: ''
   });
 
-  const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto);
+  const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto) || cryptoOptions[0];
   const userBalance = user?.balance ?? balance;
+
+  // Fetch wallet addresses configured by admin
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.getWalletAddresses();
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const opts: CryptoOption[] = res.data.map((w: any) => ({
+            value: (w._id || w.currency || '').toString(),
+            label: w.label || `${w.currency}${w.network ? ' (' + w.network + ')' : ''}`,
+            address: w.address,
+            qrCode: w.qrCode,
+            network: w.network,
+          }));
+          setCryptoOptions(opts);
+          setSelectedCrypto(opts[0].value);
+          setWithdrawCrypto(opts[0].value);
+        }
+      } catch (e) {
+        console.error('Failed to load wallet addresses', e);
+      }
+    })();
+  }, []);
 
   // Auto-fetch balance on mount
   useEffect(() => {
