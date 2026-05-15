@@ -22,13 +22,48 @@ import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient();
+
+// Smartsupp initialization component
+const SmartsuppInitializer = () => {
+  useEffect(() => {
+    // Ensure we're in browser
+    if (typeof window === 'undefined') return;
+    
+    // Check if already loaded
+    if (document.getElementById('smartsupp-script')) return;
+    
+    // Initialize Smartsupp
+    window._smartsupp = window._smartsupp || {};
+    window._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
+    
+    // Create and load script
+    const script = document.createElement('script');
+    script.id = 'smartsupp-script';
+    script.type = 'text/javascript';
+    script.charset = 'utf-8';
+    script.async = true;
+    script.defer = true;
+    script.src = 'https://www.smartsuppchat.com/loader.js?';
+    
+    // Error handling
+    script.onerror = () => {
+      console.error('Failed to load Smartsupp chat widget');
+    };
+    
+    document.head.appendChild(script);
+  }, []);
+  
+  return null;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
+        <SmartsuppInitializer />
         <Toaster />
         <Sonner />
         <BrowserRouter>
