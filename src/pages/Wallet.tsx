@@ -85,45 +85,61 @@ export default function WalletPage() {
     refreshUser();
   }, []);
 
-  // FIXED: Load Smartsupp Live Chat - Proper Implementation
+  // FIXED: Load Smartsupp Live Chat - DEFINITIVE SOLUTION
   useEffect(() => {
-    // Check if we're in browser environment
+    // Ensure we're in browser
     if (typeof window === 'undefined') return;
     
-    // Prevent duplicate loading
-    if (document.getElementById('smartsupp-script')) return;
-    
-    // Initialize Smartsupp configuration
-    (window as any)._smartsupp = (window as any)._smartsupp || {};
-    (window as any)._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
-    
-    // Create and load the script
-    const script = document.createElement('script');
-    script.id = 'smartsupp-script';
-    script.type = 'text/javascript';
-    script.charset = 'utf-8';
-    script.async = true;
-    script.defer = true;
-    script.src = 'https://www.smartsuppchat.com/loader.js?';
-    
-    // Add error handling
-    script.onerror = () => {
-      console.error('Failed to load Smartsupp chat widget');
-    };
-    
-    // Append to document head
-    document.head.appendChild(script);
-    
-    // Cleanup function to prevent memory leaks
-    return () => {
-      // Optional: Remove the widget container if it exists when component unmounts
-      const widgetContainer = document.getElementById('smartsupp-widget-container');
-      if (widgetContainer) {
-        widgetContainer.remove();
+    // Function to load Smartsupp
+    const loadSmartsupp = () => {
+      // Set up Smartsupp configuration BEFORE loading script
+      window._smartsupp = window._smartsupp || {};
+      window._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
+      
+      // Remove any existing script to avoid duplicates
+      const existingScript = document.getElementById('smartsupp-script');
+      if (existingScript) {
+        existingScript.remove();
       }
-      // Note: We don't remove the script to keep chat working if user navigates
+      
+      // Create new script element
+      const script = document.createElement('script');
+      script.id = 'smartsupp-script';
+      script.type = 'text/javascript';
+      script.textContent = `
+        var _smartsupp = _smartsupp || {};
+        _smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
+        window.smartsupp||(function(d) {
+          var s,c,o=smartsupp=function(){ o._.push(arguments)};o._=[];
+          s=d.getElementsByTagName('script')[0];
+          c=d.createElement('script');
+          c.type='text/javascript';
+          c.charset='utf-8';
+          c.async=true;
+          c.src='https://www.smartsuppchat.com/loader.js?';
+          s.parentNode.insertBefore(c,s);
+        })(document);
+      `;
+      
+      // Append to head
+      document.head.appendChild(script);
     };
-  }, []); // Empty dependency array ensures it runs once
+    
+    // Load immediately
+    loadSmartsupp();
+    
+    // Also try to load after a short delay (backup)
+    const timeoutId = setTimeout(() => {
+      if (!document.getElementById('smartsupp-widget')) {
+        console.log('Retrying Smartsupp load...');
+        loadSmartsupp();
+      }
+    }, 1000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   const showFeedback = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
     setFeedback({ open: true, type, title, message });
