@@ -596,6 +596,35 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // Wallet Addresses (deposit page)
+  async getWalletAddresses() {
+    return this.request<any[]>('/wallet-addresses');
+  }
+
+  async adminGetWalletAddresses() {
+    return this.request<any[]>('/wallet-addresses/admin');
+  }
+
+  async adminCreateWalletAddress(data: any) {
+    return this.request('/wallet-addresses/admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminUpdateWalletAddress(id: string, data: any) {
+    return this.request(`/wallet-addresses/admin/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async adminDeleteWalletAddress(id: string) {
+    return this.request(`/wallet-addresses/admin/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 const api = new ApiService();

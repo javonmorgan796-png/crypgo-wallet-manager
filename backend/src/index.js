@@ -20,6 +20,7 @@ const notificationRoutes = require('./routes/notifications');
 const investmentRoutes = require('./routes/investments');
 const copyTradeRoutes = require('./routes/copyTrade');
 const signalRoutes = require('./routes/signals');
+const walletAddressRoutes = require('./routes/walletAddresses');
 
 // Import WebSocket handlers
 const { setupWebSocket } = require('./websocket/priceUpdates');
@@ -229,6 +230,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/copy-trade', copyTradeRoutes);
 app.use('/api/signals', signalRoutes);
+app.use('/api/wallet-addresses', walletAddressRoutes);
 
 // ----------------- Serve Frontend -----------------
 const distPath = path.resolve('backend/dist');

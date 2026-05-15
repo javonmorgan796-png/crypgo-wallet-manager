@@ -22,7 +22,8 @@ import {
   Loader2,
   RefreshCw,
   Wifi,
-  WifiOff
+  WifiOff,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -39,6 +40,7 @@ import { AdminSettings } from './AdminSettings';
 import { AdminTraders } from './AdminTraders';
 import { AdminInvestmentPlans } from './AdminInvestmentPlans';
 import { AdminSignals } from './AdminSignals';
+import { AdminWalletAddresses } from './AdminWalletAddresses';
 
 // Import error boundary and chart states
 import { ErrorBoundary, ChartErrorBoundary } from '@/components/admin/ErrorBoundary';
@@ -203,6 +205,7 @@ export default function AdminDashboard() {
     { id: 'signals', label: 'Signals', icon: TrendingUp },
     { id: 'kyc', label: 'KYC Requests', icon: UserCheck },
     { id: 'transactions', label: 'Transactions', icon: Receipt },
+    { id: 'wallet-addresses', label: 'Wallet Addresses', icon: Wallet },
     { id: 'notifications', label: 'Notifications', icon: MessageSquare },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -711,6 +714,11 @@ export default function AdminDashboard() {
         {activeTab === 'signals' && (
           <ErrorBoundary fallbackTitle="Signals section error" fallbackDescription="Failed to load signals.">
             <AdminSignals />
+          </ErrorBoundary>
+        )}
+        {activeTab === 'wallet-addresses' && (
+          <ErrorBoundary fallbackTitle="Wallet addresses error" fallbackDescription="Failed to load wallet addresses.">
+            <AdminWalletAddresses />
           </ErrorBoundary>
         )}
         {activeTab === 'settings' && (

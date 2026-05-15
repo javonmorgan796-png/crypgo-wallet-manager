@@ -13,9 +13,15 @@ import api from '@/services/api';
 import { FeedbackDialog } from '@/components/ui/success-dialog';
 import { toast } from 'sonner';
 
-const cryptoOptions = [
-  { value: 'btc', label: 'Bitcoin (BTC)', address: '1E3CUe4SM1YXtS6rPnyAFjnPp5vuD2f1wC' },
-  { value: 'eth', label: 'Ethereum (ETH)', address: '0x58964d82bae9153f91e06ae222a7b53c63313b22' },
+interface CryptoOption {
+  value: string;
+  label: string;
+  address: string;
+  qrCode?: string;
+  network?: string;
+}
+
+const fallbackCryptoOptions: CryptoOption[] = [
   { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TAjj5GTpwRGYxdrNhGGYsUBXeqX5pHxauy' },
 ];
 
@@ -23,6 +29,7 @@ export default function WalletPage() {
   const { user, refreshUser } = useAuth();
   const { balance, isLoading: isDataLoading, refresh: refreshData } = useUserData();
   
+  const [cryptoOptions, setCryptoOptions] = useState<CryptoOption[]>(fallbackCryptoOptions);
   const [selectedCrypto, setSelectedCrypto] = useState('usdt-trc20');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
@@ -46,8 +53,31 @@ export default function WalletPage() {
     message: ''
   });
 
-  const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto);
+  const currentCrypto = cryptoOptions.find(c => c.value === selectedCrypto) || cryptoOptions[0];
   const userBalance = user?.balance ?? balance;
+
+  // Fetch wallet addresses configured by admin
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.getWalletAddresses();
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const opts: CryptoOption[] = res.data.map((w: any) => ({
+            value: (w._id || w.currency || '').toString(),
+            label: w.label || `${w.currency}${w.network ? ' (' + w.network + ')' : ''}`,
+            address: w.address,
+            qrCode: w.qrCode,
+            network: w.network,
+          }));
+          setCryptoOptions(opts);
+          setSelectedCrypto(opts[0].value);
+          setWithdrawCrypto(opts[0].value);
+        }
+      } catch (e) {
+        console.error('Failed to load wallet addresses', e);
+      }
+    })();
+  }, []);
 
   // Auto-fetch balance on mount
   useEffect(() => {
@@ -325,6 +355,17 @@ export default function WalletPage() {
                     </Button>
                   </div>
                 </div>
+
+                {currentCrypto?.qrCode && (
+                  <div className="flex flex-col items-center gap-2">
+                    <Label>Scan QR Code</Label>
+                    <img
+                      src={currentCrypto.qrCode}
+                      alt={`${currentCrypto.label} QR code`}
+                      className="h-44 w-44 rounded-lg border border-border bg-white p-2 object-contain"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Deposit Amount (USD)</Label>
