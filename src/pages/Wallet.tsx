@@ -22,7 +22,7 @@ interface CryptoOption {
 }
 
 const fallbackCryptoOptions: CryptoOption[] = [
-  { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TAjj5GTpwRGYxdrNhGGYsUBXeqX5pHxauy' },
+  { value: 'usdt-trc20', label: 'USDT (TRC-20)', address: 'TGMBGfMLzYkQyPw5aUCjJaZS2hxdvcDr8z' },
 ];
 
 export default function WalletPage() {
