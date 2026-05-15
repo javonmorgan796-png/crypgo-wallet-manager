@@ -24,6 +24,22 @@ const cryptoPrices = [
 ];
 
 export default function Landing() {
+  useEffect(() => {
+    // Load Smartsupp Live Chat
+    if (typeof window !== 'undefined' && !(window as any).smartsupp) {
+      (window as any)._smartsupp = (window as any)._smartsupp || {};
+      (window as any)._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
+      const d = document;
+      const s = d.getElementsByTagName('script')[0];
+      const c = d.createElement('script');
+      c.type = 'text/javascript';
+      c.charset = 'utf-8';
+      c.async = true;
+      c.src = 'https://www.smartsuppchat.com/loader.js?';
+      s.parentNode?.insertBefore(c, s);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
