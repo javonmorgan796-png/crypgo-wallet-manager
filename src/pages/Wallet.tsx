@@ -88,7 +88,7 @@ export default function WalletPage() {
   // Load Smartsupp Live Chat
   useEffect(() => {
     if (typeof window !== 'undefined' && !(window as any).smartsupp) {
-      (window as any)._smartsupp = (window as any)._smartsupp || {};
+      (window as any)._smartsupp = (window as any)._smartsupp || [];
       (window as any)._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
       const d = document;
       const s = d.getElementsByTagName('script')[0];
