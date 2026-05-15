@@ -85,21 +85,45 @@ export default function WalletPage() {
     refreshUser();
   }, []);
 
-  // Load Smartsupp Live Chat
+  // FIXED: Load Smartsupp Live Chat - Proper Implementation
   useEffect(() => {
-    if (typeof window !== 'undefined' && !(window as any).smartsupp) {
-      (window as any)._smartsupp = (window as any)._smartsupp || [];
-      (window as any)._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
-      const d = document;
-      const s = d.getElementsByTagName('script')[0];
-      const c = d.createElement('script');
-      c.type = 'text/javascript';
-      c.charset = 'utf-8';
-      c.async = true;
-      c.src = 'https://www.smartsuppchat.com/loader.js?';
-      s.parentNode?.insertBefore(c, s);
-    }
-  }, []);
+    // Check if we're in browser environment
+    if (typeof window === 'undefined') return;
+    
+    // Prevent duplicate loading
+    if (document.getElementById('smartsupp-script')) return;
+    
+    // Initialize Smartsupp configuration
+    (window as any)._smartsupp = (window as any)._smartsupp || {};
+    (window as any)._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
+    
+    // Create and load the script
+    const script = document.createElement('script');
+    script.id = 'smartsupp-script';
+    script.type = 'text/javascript';
+    script.charset = 'utf-8';
+    script.async = true;
+    script.defer = true;
+    script.src = 'https://www.smartsuppchat.com/loader.js?';
+    
+    // Add error handling
+    script.onerror = () => {
+      console.error('Failed to load Smartsupp chat widget');
+    };
+    
+    // Append to document head
+    document.head.appendChild(script);
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      // Optional: Remove the widget container if it exists when component unmounts
+      const widgetContainer = document.getElementById('smartsupp-widget-container');
+      if (widgetContainer) {
+        widgetContainer.remove();
+      }
+      // Note: We don't remove the script to keep chat working if user navigates
+    };
+  }, []); // Empty dependency array ensures it runs once
 
   const showFeedback = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
     setFeedback({ open: true, type, title, message });
@@ -505,35 +529,24 @@ export default function WalletPage() {
                   <Label>Amount (USD)</Label>
                   <Input
                     type="number"
-                    placeholder="0.00"
+                    placeholder="Enter amount"
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
                     className="bg-secondary border-border"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Available: {balanceVisible 
-                      ? `$${userBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : '******'
-                    }
-                  </p>
                 </div>
 
-                <div className="flex gap-3">
-                  {[25, 50, 75, 100].map((percent) => (
-                    <Button
-                      key={percent}
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 border-border hover:bg-primary/10 hover:text-primary"
-                      onClick={() => setWithdrawAmount((userBalance * percent / 100).toFixed(2))}
-                    >
-                      {percent}%
-                    </Button>
-                  ))}
+                <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                  <h4 className="font-medium text-foreground mb-2">Withdrawal Information:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Minimum withdrawal: $50 equivalent</li>
+                    <li>Processing time: 24 hours</li>
+                    <li>You'll receive a confirmation email once processed</li>
+                  </ul>
                 </div>
 
                 <Button 
-                  onClick={handleWithdraw} 
+                  onClick={handleWithdraw}
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                   size="lg"
                   disabled={isSubmitting}
@@ -544,16 +557,9 @@ export default function WalletPage() {
                       Processing...
                     </>
                   ) : (
-                    <>
-                      <ArrowUpRight className="h-4 w-4 mr-2" />
-                      Request Withdrawal
-                    </>
+                    'Submit Withdrawal Request'
                   )}
                 </Button>
-
-                <p className="text-xs text-center text-muted-foreground">
-                  Withdrawals are processed within 24 hours. A network fee may apply.
-                </p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -562,19 +568,3 @@ export default function WalletPage() {
     </DashboardLayout>
   );
 }
-
-
-
-
-<!-- Smartsupp Live Chat script -->
-<script type="text/javascript">
-var _smartsupp = _smartsupp || {};
-_smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
-window.smartsupp||(function(d) {
-  var s,c,o=smartsupp=function(){ o._.push(arguments)};o._=[];
-  s=d.getElementsByTagName('script')[0];c=d.createElement('script');
-  c.type='text/javascript';c.charset='utf-8';c.async=true;
-  c.src='https://www.smartsuppchat.com/loader.js?';s.parentNode.insertBefore(c,s);
-})(document);
-</script>
-<noscript> Powered by <a href=“https://www.smartsupp.com” target=“_blank”>Smartsupp</a></noscript>
