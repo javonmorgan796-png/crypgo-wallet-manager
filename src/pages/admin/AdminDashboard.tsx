@@ -279,59 +279,62 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <main className="flex-1 p-4 lg:p-8 overflow-auto pt-20 lg:pt-8">
         {activeTab === 'overview' && (
-          <div className="space-y-8">
-            <div className="flex items-center justify-between">
+          <div className="space-y-6 lg:space-y-8">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-3xl font-bold">Dashboard Overview</h2>
-                <p className="text-muted-foreground">Welcome back, {user?.name}</p>
+                <h2 className="text-2xl lg:text-3xl font-bold">Dashboard Overview</h2>
+                <p className="text-sm text-muted-foreground">Welcome back, {user?.name}</p>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:gap-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>Last update: {lastRefresh.toLocaleTimeString()}</span>
+                  <span className="truncate">Updated: {lastRefresh.toLocaleTimeString()}</span>
                   {autoRefresh && (
-                    <Badge variant="secondary" className="text-xs">
-                      Auto-refresh ON
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                      LIVE
                     </Badge>
                   )}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  className={autoRefresh ? 'border-primary text-primary' : ''}
-                >
-                  <RefreshCw className={`h-4 w-4 mr-1 ${autoRefresh ? 'animate-spin' : ''}`} />
-                  {autoRefresh ? 'Auto' : 'Manual'}
-                </Button>
-                <Select value={period} onValueChange={setPeriod}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7">Last 7 days</SelectItem>
-                    <SelectItem value="30">Last 30 days</SelectItem>
-                    <SelectItem value="90">Last 90 days</SelectItem>
-                    <SelectItem value="365">Last year</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button 
-                  onClick={() => refreshData(false)} 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isRefreshing}
-                >
-                  {isRefreshing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  <span className="ml-1">Refresh</span>
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select value={period} onValueChange={setPeriod}>
+                    <SelectTrigger className="w-full sm:w-[140px] h-9">
+                      <SelectValue placeholder="Period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">Last 7 days</SelectItem>
+                      <SelectItem value="30">Last 30 days</SelectItem>
+                      <SelectItem value="90">Last 90 days</SelectItem>
+                      <SelectItem value="365">Last year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAutoRefresh(!autoRefresh)}
+                    className={`flex-1 sm:flex-none ${autoRefresh ? 'border-primary text-primary' : ''}`}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${autoRefresh ? 'animate-spin' : ''}`} />
+                    <span className="ml-1">{autoRefresh ? 'Auto' : 'Manual'}</span>
+                  </Button>
+                  <Button
+                    onClick={() => refreshData(false)}
+                    variant="outline"
+                    size="sm"
+                    disabled={isRefreshing}
+                    className="flex-1 sm:flex-none"
+                  >
+                    {isRefreshing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    <span className="ml-1">Refresh</span>
+                  </Button>
+                </div>
               </div>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
