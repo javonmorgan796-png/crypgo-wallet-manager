@@ -39,6 +39,7 @@ const navItems = [
   { id: 'signals', label: 'Signals', icon: TrendingUp },
   { id: 'kyc', label: 'KYC Requests', icon: UserCheck, badge: 'pendingKYC' },
   { id: 'transactions', label: 'Transactions', icon: Receipt, badge: 'pendingTransactions' },
+  { id: 'wallet-addresses', label: 'Wallet Addresses', icon: Wallet },
   { id: 'notifications', label: 'Notifications', icon: MessageSquare },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
