@@ -52,11 +52,11 @@ export default function SignUp() {
       const result = await signup(name, email, password, referralToUse);
       
       if (result.success) {
-        setSignupComplete(true);
         toast({
           title: 'Account created!',
-          description: 'Please check your email to verify your account.',
+          description: 'You can now sign in with your credentials.',
         });
+        navigate('/login');
       } else {
         toast({
           title: 'Error',

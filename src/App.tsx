@@ -36,8 +36,8 @@ const SmartsuppInitializer = () => {
     if (document.getElementById('smartsupp-script')) return;
     
     // Initialize Smartsupp
-    window._smartsupp = window._smartsupp || {};
-    window._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
+    (window as any)._smartsupp = (window as any)._smartsupp || {};
+    (window as any)._smartsupp.key = '7e4e75d9f82cdd637468f9b81637a5f877932168';
     
     // Create and load script
     const script = document.createElement('script');
