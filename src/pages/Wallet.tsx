@@ -36,6 +36,8 @@ export default function WalletPage() {
   const [withdrawCrypto, setWithdrawCrypto] = useState('usdt-trc20');
   const [copied, setCopied] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
+  const [isFetchingAddress, setIsFetchingAddress] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -307,12 +309,63 @@ export default function WalletPage() {
                     type="number"
                     placeholder="Enter amount (min $100)"
                     value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
+                    onChange={(e) => {
+                      setDepositAmount(e.target.value);
+                      setAddressConfirmed(false);
+                    }}
                     className="bg-secondary border-border"
                   />
                 </div>
 
-                {depositAmount && parseFloat(depositAmount) > 0 && (
+                {depositAmount && parseFloat(depositAmount) > 0 && !addressConfirmed && (
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      if (parseFloat(depositAmount) < 100) {
+                        toast.error('Minimum deposit is $100');
+                        return;
+                      }
+                      setIsFetchingAddress(true);
+                      try {
+                        const res = await api.getWalletAddresses();
+                        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+                          const opts: CryptoOption[] = res.data.map((w: any) => ({
+                            value: (w._id || w.currency || '').toString(),
+                            label: w.label || `${w.currency}${w.network ? ' (' + w.network + ')' : ''}`,
+                            address: w.address,
+                            qrCode: w.qrCode,
+                            network: w.network,
+                          }));
+                          setCryptoOptions(opts);
+                          if (!opts.find(o => o.value === selectedCrypto)) {
+                            setSelectedCrypto(opts[0].value);
+                          }
+                          setAddressConfirmed(true);
+                          toast.success('Latest deposit address loaded');
+                        } else {
+                          toast.error('No active deposit address available. Please contact support.');
+                        }
+                      } catch (err) {
+                        toast.error('Failed to fetch the latest wallet address. Try again.');
+                      } finally {
+                        setIsFetchingAddress(false);
+                      }
+                    }}
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={isFetchingAddress}
+                  >
+                    {isFetchingAddress ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Loading latest address...
+                      </>
+                    ) : (
+                      <>Confirm amount & show wallet address</>
+                    )}
+                  </Button>
+                )}
+
+                {depositAmount && parseFloat(depositAmount) > 0 && addressConfirmed && (
                   <>
                     <div className="space-y-2">
                       <Label>Select Cryptocurrency</Label>
