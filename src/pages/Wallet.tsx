@@ -302,56 +302,6 @@ export default function WalletPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Select Cryptocurrency</Label>
-                  <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
-                    <SelectTrigger className="bg-secondary border-border">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cryptoOptions.map((crypto) => (
-                        <SelectItem key={crypto.value} value={crypto.value}>
-                          {crypto.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Wallet Address</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      value={currentCrypto?.address || ''}
-                      className="bg-secondary border-border font-mono text-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => copyToClipboard(currentCrypto?.address || '', 'crypto')}
-                      className="border-border"
-                    >
-                      {copied === 'crypto' ? (
-                        <Check className="h-4 w-4 text-primary" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {currentCrypto?.qrCode && (
-                  <div className="flex flex-col items-center gap-2">
-                    <Label>Scan QR Code</Label>
-                    <img
-                      src={currentCrypto.qrCode}
-                      alt={`${currentCrypto.label} QR code`}
-                      className="h-44 w-44 rounded-lg border border-border bg-white p-2 object-contain"
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
                   <Label>Deposit Amount (USD)</Label>
                   <Input
                     type="number"
@@ -361,6 +311,60 @@ export default function WalletPage() {
                     className="bg-secondary border-border"
                   />
                 </div>
+
+                {depositAmount && parseFloat(depositAmount) > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Select Cryptocurrency</Label>
+                      <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
+                        <SelectTrigger className="bg-secondary border-border">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cryptoOptions.map((crypto) => (
+                            <SelectItem key={crypto.value} value={crypto.value}>
+                              {crypto.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Wallet Address</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          value={currentCrypto?.address || ''}
+                          className="bg-secondary border-border font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => copyToClipboard(currentCrypto?.address || '', 'crypto')}
+                          className="border-border"
+                        >
+                          {copied === 'crypto' ? (
+                            <Check className="h-4 w-4 text-primary" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {currentCrypto?.qrCode && (
+                      <div className="flex flex-col items-center gap-2">
+                        <Label>Scan QR Code</Label>
+                        <img
+                          src={currentCrypto.qrCode}
+                          alt={`${currentCrypto.label} QR code`}
+                          className="h-44 w-44 rounded-lg border border-border bg-white p-2 object-contain"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* Receipt Upload */}
                 <div className="space-y-2">
