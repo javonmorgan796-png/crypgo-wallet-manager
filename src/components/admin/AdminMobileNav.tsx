@@ -10,6 +10,7 @@ import {
   MessageSquare, 
   Settings,
   DollarSign,
+  Wallet,
   LogOut,
   Home
 } from 'lucide-react';
