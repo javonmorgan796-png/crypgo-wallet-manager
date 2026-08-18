@@ -278,7 +278,7 @@ export default function WalletPage() {
         </Card>
 
         {/* Deposit/Withdraw Tabs */}
-        <Tabs defaultValue="deposit" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2 bg-secondary">
             <TabsTrigger value="deposit" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <ArrowDownLeft className="h-4 w-4 mr-2" />
