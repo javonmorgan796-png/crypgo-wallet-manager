@@ -36,11 +36,11 @@ export default function WalletPage() {
   const [withdrawCrypto, setWithdrawCrypto] = useState('usdt-trc20');
   const [copied, setCopied] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
-  const [addressConfirmed, setAddressConfirmed] = useState(false);
-  const [isFetchingAddress, setIsFetchingAddress] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingAddress, setIsFetchingAddress] = useState(false);
+  const [activeTab, setActiveTab] = useState('deposit');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [feedback, setFeedback] = useState<{
