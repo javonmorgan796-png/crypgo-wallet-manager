@@ -321,7 +321,7 @@ export default function WalletPage() {
                   </div>
                 )}
 
-                {depositAmount && parseFloat(depositAmount) > 0 && addressConfirmed && (
+                {activeTab === 'deposit' && depositAmount && parseFloat(depositAmount) > 0 && (
                   <>
                     <div className="space-y-2">
                       <Label>Select Cryptocurrency</Label>
