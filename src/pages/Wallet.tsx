@@ -59,27 +59,43 @@ export default function WalletPage() {
   const userBalance = user?.balance ?? balance;
 
   // Fetch wallet addresses configured by admin
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.getWalletAddresses();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const opts: CryptoOption[] = res.data.map((w: any) => ({
-            value: (w._id || w.currency || '').toString(),
-            label: w.label || `${w.currency}${w.network ? ' (' + w.network + ')' : ''}`,
-            address: w.address,
-            qrCode: w.qrCode,
-            network: w.network,
-          }));
-          setCryptoOptions(opts);
+  const fetchWalletAddresses = async () => {
+    setIsFetchingAddress(true);
+    try {
+      const res = await api.getWalletAddresses();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const opts: CryptoOption[] = res.data.map((w: any) => ({
+          value: (w._id || w.currency || '').toString(),
+          label: w.label || `${w.currency}${w.network ? ' (' + w.network + ')' : ''}`,
+          address: w.address,
+          qrCode: w.qrCode,
+          network: w.network,
+        }));
+        setCryptoOptions(opts);
+        if (!opts.find(o => o.value === selectedCrypto)) {
           setSelectedCrypto(opts[0].value);
+        }
+        if (!opts.find(o => o.value === withdrawCrypto)) {
           setWithdrawCrypto(opts[0].value);
         }
-      } catch (e) {
-        console.error('Failed to load wallet addresses', e);
       }
-    })();
+    } catch (e) {
+      console.error('Failed to load wallet addresses', e);
+    } finally {
+      setIsFetchingAddress(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWalletAddresses();
   }, []);
+
+  // Re-fetch the latest address whenever the user opens the Deposit tab
+  useEffect(() => {
+    if (activeTab === 'deposit') {
+      fetchWalletAddresses();
+    }
+  }, [activeTab]);
 
   // Auto-fetch balance on mount
   useEffect(() => {
