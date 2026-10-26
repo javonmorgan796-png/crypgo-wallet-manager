@@ -1,127 +1,150 @@
+
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect } = require('../middleware/auth');
 const { sendEmail, emailTemplates } = require('../utils/nodemailer');
-const { notifyNewDeposit, notifyNewWithdrawal } = require('../websocket/adminUpdates');
+const {
+  notifyNewDeposit,
+  notifyNewWithdrawal
+} = require('../websocket/adminUpdates');
 
 const router = express.Router();
 
-// Use memory storage - we'll store as base64 in the database
+// ==========================================
+// FILE UPLOAD CONFIGURATION
+// ==========================================
+
 const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  },
   fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|pdf|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf';
-    
-    if (extname || mimetype) {
+    const extname = allowedTypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
+
+    const mimetype =
+      file.mimetype.startsWith('image/') ||
+      file.mimetype === 'application/pdf';
+
+    if (extname && mimetype) {
       return cb(null, true);
     }
-    cb(new Error('Only images and PDFs are allowed'));
+
+    return cb(new Error('Only images and PDFs are allowed'));
   }
 });
 
-// Get wallet balance
+// ==========================================
+// GET WALLET BALANCE
+// ==========================================
+
 router.get('/balance', protect, async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      balance: req.user.balance,
-      currency: 'USD'
-    }
-  });
+  try {
+    res.json({
+      success: true,
+      data: {
+        balance: req.user.balance,
+        currency: 'USD'
+      }
+    });
+  } catch (error) {
+    console.error('Balance error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve wallet balance'
+    });
+  }
 });
 
-// Deposit - NO KYC REQUIRED
-router.post('/deposit', protect, (req, res, next) => {
-  console.log('Deposit request received');
-  
+// ==========================================
+// DEPOSIT - SUBMIT DEPOSIT REQUEST
+// ==========================================
+
+router.post('/deposit', protect, (req, res) => {
   upload.single('receipt')(req, res, async (err) => {
-    console.log('Upload callback triggered');
-    console.log('Request body:', req.body);
-    console.log('Request file:', req.file ? 'File present' : 'No file');
-    
     if (err instanceof multer.MulterError) {
-      console.error('Multer error:', err);
       return res.status(400).json({
         success: false,
-        message: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 5MB)' : err.message
+        message:
+          err.code === 'LIMIT_FILE_SIZE'
+            ? 'File too large (max 5MB)'
+            : err.message
       });
-    } else if (err) {
-      console.error('Upload error:', err);
+    }
+
+    if (err) {
       return res.status(400).json({
         success: false,
         message: err.message || 'File upload failed'
       });
     }
-    
+
     try {
       const { amount, method } = req.body;
-      
-      console.log('Processing deposit:', { amount, method });
-      
-      if (!amount || parseFloat(amount) <= 0) {
+      const depositAmount = Number(amount);
+
+      if (
+        amount === undefined ||
+        amount === null ||
+        amount === '' ||
+        !Number.isFinite(depositAmount) ||
+        depositAmount <= 0
+      ) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid amount'
+          message: 'Invalid deposit amount'
         });
       }
-      
-      if (parseFloat(amount) < 100) {
+
+      if (depositAmount < 100) {
         return res.status(400).json({
           success: false,
           message: 'Minimum deposit is $100'
         });
       }
 
-      // Store receipt as base64 data URI in the database
       let receiptUrl = null;
-      
+
       if (req.file && req.file.buffer) {
-        console.log('Converting receipt to base64:', req.file.originalname, req.file.mimetype);
         const base64 = req.file.buffer.toString('base64');
+
         receiptUrl = `data:${req.file.mimetype};base64,${base64}`;
-        console.log('Receipt stored as base64 data URI, length:', receiptUrl.length);
       }
-      
-      const transactionData = {
+
+      const transaction = await Transaction.create({
         user: req.user._id,
         type: 'deposit',
-        amount: parseFloat(amount),
+        amount: depositAmount,
         method: method || 'crypto',
         status: 'pending',
-        receiptUrl: receiptUrl
-      };
-      
-      console.log('Creating transaction with receipt:', receiptUrl ? 'base64 present' : 'no receipt');
-      
-      const transaction = await Transaction.create(transactionData);
-      
-      console.log('Transaction created:', transaction._id);
-      
-      // Create notification
+        receiptUrl
+      });
+
       await Notification.create({
         user: req.user._id,
         title: 'Deposit Pending',
-        message: `Your deposit of $${amount} is pending approval.`,
+        message: `Your deposit of $${depositAmount} is pending approval.`,
         type: 'transaction'
       });
-      
-      // Notify admins via WebSocket
+
       try {
         notifyNewDeposit(transaction);
       } catch (wsErr) {
-        console.error('WebSocket notification error:', wsErr);
+        console.error('Deposit WebSocket notification error:', wsErr);
       }
-      
-      res.status(201).json({
+
+      return res.status(201).json({
         success: true,
         message: 'Deposit request submitted successfully',
         data: {
@@ -131,75 +154,91 @@ router.post('/deposit', protect, (req, res, next) => {
       });
     } catch (error) {
       console.error('Deposit error:', error);
-      console.error('Error stack:', error.stack);
-      res.status(500).json({
+
+      return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to process deposit request. Please try again.'
+        message: 'Failed to process deposit request. Please try again.'
       });
     }
   });
 });
 
-// Withdraw - Email verification required, KYC required for large amounts only
-router.post('/withdraw', async (req, res, next) => {
+// ==========================================
+// WITHDRAWAL - NO IN-APP KYC GATE
+// Authentication is still required.
+// Requests remain pending for processing.
+// ==========================================
+
+router.post('/withdraw', protect, async (req, res) => {
   try {
     const { amount, address, method } = req.body;
-    
-    if (!amount || amount <= 0) {
+    const withdrawalAmount = Number(amount);
+
+    // Validate the withdrawal amount.
+    if (
+      amount === undefined ||
+      amount === null ||
+      amount === '' ||
+      !Number.isFinite(withdrawalAmount) ||
+      withdrawalAmount <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid amount'
+        message: 'Invalid withdrawal amount'
       });
     }
-    
-    if (amount > req.user.balance) {
+
+    // Validate the current balance.
+    if (
+      !Number.isFinite(Number(req.user.balance)) ||
+      withdrawalAmount > Number(req.user.balance)
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Insufficient balance'
       });
     }
-    
-    // Check email verification
-   // if (!req.user.isVerified) {
-    //  return res.status(400).json({
-    //  success: false,
-      //  message: 'Please verify your email before withdrawing'
+
+    // Validate the withdrawal details.
+    if (
+      typeof address !== 'string' ||
+      !address.trim() ||
+      typeof method !== 'string' ||
+      !method.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Withdrawal address and method are required'
       });
     }
-    
-    // Check KYC for large withdrawals (over $1000)
- //   if (amount > 1000 && req.user.kycStatus !== 'approved') {
-  //    return res.status(400).json({
-   //     success: false,
-   //     message: 'KYC verification required for withdrawals over $1,000'
-  //    });
-  //  }
-    
+
+    // No in-app KYC or email-verification check here.
+    // The request is not paid automatically.
     const transaction = await Transaction.create({
       user: req.user._id,
       type: 'withdrawal',
-      amount: parseFloat(amount),
-      method,
-      withdrawalAddress: address,
+      amount: withdrawalAmount,
+      method: method.trim(),
+      withdrawalAddress: address.trim(),
       status: 'pending'
     });
-    
-    // Create notification
+
+    // Notify the user.
     await Notification.create({
       user: req.user._id,
       title: 'Withdrawal Pending',
-      message: `Your withdrawal of $${amount} is being processed.`,
+      message: `Your withdrawal of $${withdrawalAmount} is being processed.`,
       type: 'transaction'
     });
-    
-    // Notify admins via WebSocket
+
+    // Notify administrators.
     try {
       notifyNewWithdrawal(transaction);
     } catch (wsErr) {
-      console.error('WebSocket notification error:', wsErr);
+      console.error('Withdrawal WebSocket notification error:', wsErr);
     }
-    
-    res.status(201).json({
+
+    return res.status(201).json({
       success: true,
       message: 'Withdrawal request submitted successfully',
       data: {
@@ -209,50 +248,102 @@ router.post('/withdraw', async (req, res, next) => {
     });
   } catch (error) {
     console.error('Withdrawal error:', error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: 'Failed to process withdrawal request. Please try again.'
     });
   }
 });
 
-// Get transactions
+// ==========================================
+// GET TRANSACTIONS
+// ==========================================
+
 router.get('/transactions', protect, async (req, res, next) => {
   try {
-    const { type, status, dateFrom, dateTo, page = 1, limit = 20 } = req.query;
-    
-    const filter = { user: req.user._id };
-    
+    const {
+      type,
+      status,
+      dateFrom,
+      dateTo,
+      page = '1',
+      limit = '20'
+    } = req.query;
+
+    const pageNumber = Number(page);
+    const pageSize = Number(limit);
+
+    if (
+      !Number.isInteger(pageNumber) ||
+      pageNumber < 1 ||
+      !Number.isInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid pagination parameters'
+      });
+    }
+
+    const filter = {
+      user: req.user._id
+    };
+
     if (type) filter.type = type;
     if (status) filter.status = status;
+
     if (dateFrom || dateTo) {
       filter.createdAt = {};
-      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+
+        if (Number.isNaN(from.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid start date'
+          });
+        }
+
+        filter.createdAt.$gte = from;
+      }
+
+      if (dateTo) {
+        const to = new Date(dateTo);
+
+        if (Number.isNaN(to.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid end date'
+          });
+        }
+
+        filter.createdAt.$lte = to;
+      }
     }
-    
+
     const transactions = await Transaction.find(filter)
-      .sort('-createdAt')
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-    
+      .sort({ createdAt: -1 })
+      .skip((pageNumber - 1) * pageSize)
+      .limit(pageSize);
+
     const total = await Transaction.countDocuments(filter);
-    
-    res.json({
+
+    return res.json({
       success: true,
       data: transactions,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: pageNumber,
+        limit: pageSize,
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / pageSize)
       }
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
 module.exports = router;
-
-
