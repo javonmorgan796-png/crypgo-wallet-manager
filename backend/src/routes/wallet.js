@@ -141,7 +141,7 @@ router.post('/deposit', protect, (req, res, next) => {
 });
 
 // Withdraw - Email verification required, KYC required for large amounts only
-router.post('/withdraw', protect, async (req, res, next) => {
+router.post('/withdraw', async (req, res, next) => {
   try {
     const { amount, address, method } = req.body;
     
