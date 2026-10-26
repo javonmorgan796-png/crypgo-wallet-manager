@@ -160,20 +160,20 @@ router.post('/withdraw', protect, async (req, res, next) => {
     }
     
     // Check email verification
-    if (!req.user.isVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please verify your email before withdrawing'
+   // if (!req.user.isVerified) {
+    //  return res.status(400).json({
+    //  success: false,
+      //  message: 'Please verify your email before withdrawing'
       });
     }
     
     // Check KYC for large withdrawals (over $1000)
-    if (amount > 1000 && req.user.kycStatus !== 'approved') {
-      return res.status(400).json({
-        success: false,
-        message: 'KYC verification required for withdrawals over $1,000'
-      });
-    }
+ //   if (amount > 1000 && req.user.kycStatus !== 'approved') {
+  //    return res.status(400).json({
+   //     success: false,
+   //     message: 'KYC verification required for withdrawals over $1,000'
+  //    });
+  //  }
     
     const transaction = await Transaction.create({
       user: req.user._id,
@@ -254,3 +254,5 @@ router.get('/transactions', protect, async (req, res, next) => {
 });
 
 module.exports = router;
+
+
